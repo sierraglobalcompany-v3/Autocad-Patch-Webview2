@@ -134,7 +134,7 @@ function PCAD-Finish {
     foreach($c in @($data.Checks)){$lines.Add(("{0}: {1} ({2}) {3}" -f $c.Section,$c.Status,$c.Count,$c.Detail))}
     if($historical.Count -gt 0 -and $null -ne $historical[0] -and $null -ne $historical[0].Recovery){
         $rec=$historical[0].Recovery
-        $lines.Add(('Recuperacion: {0} reglas propias activas, {1} operaciones por revisar, {2} respaldos invalidos / lectura {3}' -f $rec.ActiveRules,$rec.NeedsReview,$rec.Unverified,$rec.Status))
+        $lines.Add(('Recuperacion: {0} reglas registradas activas (NO VERIFICADAS), {1} operaciones por revisar, {2} respaldos invalidos / lectura {3}' -f $rec.ActiveRules,$rec.NeedsReview,$rec.Unverified,$rec.Status))
     }
     $lines.Add('WebView2 de AutoCAD aislado: NO VERIFICADO.')
     $lines.Add(("Informe: {0}" -f $file))
