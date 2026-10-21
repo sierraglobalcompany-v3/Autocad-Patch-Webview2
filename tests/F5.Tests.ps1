@@ -2,7 +2,7 @@
 Set-StrictMode -Version 2.0
 $ErrorActionPreference='Stop'
 $root=Split-Path -Parent $PSScriptRoot
-foreach($name in @('ParcheCAD.Core.ps1','ParcheCAD.Catalogo.ps1','ParcheCAD.Policy.ps1','ParcheCAD.Firewall.ps1','ParcheCAD.Evidence.ps1','ParcheCAD.Diagnostico.ps1')){
+foreach($name in @('ParcheCAD.Core.ps1','ParcheCAD.Catalogo.ps1','ParcheCAD.Policy.ps1','ParcheCAD.Firewall.ps1','ParcheCAD.Evidence.ps1','ParcheCAD.Historico.ps1','ParcheCAD.Diagnostico.ps1')){
     $f=Join-Path (Join-Path $root 'src') $name
     $tok=$null;$errs=$null
     $null=[Management.Automation.Language.Parser]::ParseFile($f,[ref]$tok,[ref]$errs)
@@ -13,6 +13,7 @@ foreach($name in @('ParcheCAD.Core.ps1','ParcheCAD.Catalogo.ps1','ParcheCAD.Poli
 . (Join-Path $root 'src\ParcheCAD.Policy.ps1')
 . (Join-Path $root 'src\ParcheCAD.Evidence.ps1')
 . (Join-Path $root 'src\ParcheCAD.Firewall.ps1')
+. (Join-Path $root 'src\ParcheCAD.Historico.ps1')
 function Assert-F5([bool]$Condition,[string]$Reason){if(!$Condition){throw "F5 FAIL: $Reason"}}
 $path='C:\Users\NombrePrivado\AppData\Local\Autodesk\AutoCAD Custom 2025\acad.exe'
 Assert-F5 ((Protect-PCADPath $path) -notmatch 'NombrePrivado') 'public paths redacted'
@@ -68,6 +69,18 @@ try {
     function Get-PCADActualRuleStatus {throw 'SIMULATED_NO_FIREWALL_ACCESS'}
     $undo=Invoke-PCADRollbackRules -JournalPath $journalPath -Commit
     Assert-F5 ($undo.Status -eq 'PARTIAL_ROLLBACK' -and $undo.Remaining -eq 1) 'interrupted CREATING remains blocked for review'
+    $incomplete=Get-PCADRecoveryOverview -JournalDirectory $journalDir
+    Assert-F5 ($incomplete.Status -eq 'OK' -and $incomplete.NeedsReview -eq 1) 'incomplete journal is detected read-only'
+    $completed=[pscustomobject]@{
+        Schema='PCAD4_OPERATION_1';Status='APPLIED';FinishedAt='';
+        Operations=@([pscustomobject]@{State='CREATED'})
+    }
+    Write-PCADJournal -Journal $completed -File (Join-Path $journalDir 'PCAD4_active.json')
+    [IO.File]::WriteAllText((Join-Path $journalDir 'PCAD4_corrupt.json'),'{INVALID_JSON')
+    $overview=Get-PCADRecoveryOverview -JournalDirectory $journalDir
+    Assert-F5 ($overview.Status -eq 'PARCIAL' -and $overview.NeedsReview -eq 1 -and $overview.ActiveRules -eq 1 -and $overview.Unverified -eq 1) 'active/incomplete/corrupt journals differentiated'
+    $legacy=Get-PCADLegacyOverview -JournalDirectory $journalDir
+    Assert-F5 ($legacy.Recovery.NeedsReview -eq 1 -and @($legacy.Warnings).Count -gt 0) 'historical dashboard warns of incomplete operations'
 } finally {
     if(Test-Path -LiteralPath $temp){Remove-Item -LiteralPath $temp -Recurse -Force}
 }
