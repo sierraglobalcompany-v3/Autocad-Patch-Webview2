@@ -45,14 +45,21 @@ try{
     Assert-F17 (@($m.Gates).Count -eq 10) 'all ten gates'
     Assert-F17 (@($m.Gates | Where-Object {$_.ExternalEvidence -cne 'PENDING_REVIEW'}).Count -eq 0) 'external evidence never autopasses'
     Assert-F17 ((Get-Content -LiteralPath $f -Raw) -notmatch '(?i)C:\\Users\\|192\.0\.2\.') 'matrix sanitized'
-    # No stale evaluation overwrite.
-    & $exe -NoLogo -NoProfile -ExecutionPolicy RemoteSigned -File $tool -Mode Evaluate -SessionDirectory $tmp *> $null
-    Assert-F17 ($LASTEXITCODE -ne 0) 'refuse overwrite'
-    $after=Join-Path $tmp 'after\two\diagnostico.json'
-    Remove-Item -LiteralPath $after -Force
-    $null=Remove-Item -LiteralPath (Join-Path $tmp 'evaluacion') -Recurse -Force
-    & $exe -NoLogo -NoProfile -ExecutionPolicy RemoteSigned -File $tool -Mode Evaluate -SessionDirectory $tmp *> $null
-    Assert-F17 ($LASTEXITCODE -ne 0) 'missing after fails closed'
+    # Expected failures: PowerShell 5.1 maps native stderr to NativeCommandError
+    # under Stop. Scope Continue only around these negative test invocations.
+    $oldPreference=$ErrorActionPreference
+    try {
+        $ErrorActionPreference='Continue'
+        & $exe -NoLogo -NoProfile -ExecutionPolicy RemoteSigned -File $tool -Mode Evaluate -SessionDirectory $tmp *> $null
+        $overwriteExit=$LASTEXITCODE
+        $after=Join-Path $tmp 'after\two\diagnostico.json'
+        Remove-Item -LiteralPath $after -Force
+        $null=Remove-Item -LiteralPath (Join-Path $tmp 'evaluacion') -Recurse -Force
+        & $exe -NoLogo -NoProfile -ExecutionPolicy RemoteSigned -File $tool -Mode Evaluate -SessionDirectory $tmp *> $null
+        $missingExit=$LASTEXITCODE
+    } finally {$ErrorActionPreference=$oldPreference}
+    Assert-F17 ($overwriteExit -ne 0) 'refuse overwrite'
+    Assert-F17 ($missingExit -ne 0) 'missing after fails closed'
     Assert-F17 (!(Test-Path -LiteralPath (Join-Path $tmp 'evaluacion\F17_MATRIZ_EVIDENCIA.json'))) 'no partial matrix'
     Write-Host 'PASS F17: session distinct, 10 evidence gates, fail-closed, no RC1 or firewall changes.' -ForegroundColor Green
 }finally{
