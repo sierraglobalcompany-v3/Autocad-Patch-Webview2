@@ -14,12 +14,19 @@ jobs:
           $ErrorActionPreference='Stop'
           & .\tests\F0.Tests.ps1
           & .\tests\F1F2.Tests.ps1
+          & .\tests\F3F4.Tests.ps1
       - name: Smoke F0 on clean Windows runner (read-only)
         shell: powershell
         timeout-minutes: 6
         run: |
           $ErrorActionPreference='Stop'
           & .\src\ParcheCAD.Diagnostico.ps1 -NoExport
+      - name: Firewall preview smoke (read-only, no AutoCAD)
+        shell: powershell
+        timeout-minutes: 4
+        run: |
+          $ErrorActionPreference='Stop'
+          & .\src\ParcheCAD.Reglas.ps1 -Mode Preview
   powershell-7:
     runs-on: windows-2022
     steps:
@@ -30,3 +37,4 @@ jobs:
           $ErrorActionPreference='Stop'
           & .\tests\F0.Tests.ps1
           & .\tests\F1F2.Tests.ps1
+          & .\tests\F3F4.Tests.ps1

@@ -6,6 +6,8 @@ $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot 'ParcheCAD.Core.ps1')
 . (Join-Path $PSScriptRoot 'ParcheCAD.Catalogo.ps1')
 . (Join-Path $PSScriptRoot 'ParcheCAD.Historico.ps1')
+. (Join-Path $PSScriptRoot 'ParcheCAD.Network.ps1')
+. (Join-Path $PSScriptRoot 'ParcheCAD.Policy.ps1')
 
 $started=Get-Date
 $sections=[ordered]@{}
@@ -18,7 +20,9 @@ $stages=@(
     @{Key='Firewall';Label='Reglas heredadas y activas'},
     @{Key='Tasks';Label='Tareas programadas'},
     @{Key='Historico';Label='Resumen de bloqueos anteriores'},
-    @{Key='Connections';Label='Conexiones TCP y endpoints UDP'}
+    @{Key='Connections';Label='Conexiones TCP y endpoints UDP'},
+    @{Key='NetworkOverview';Label='Atribucion WebView2 y conexiones'},
+    @{Key='PolicyPreview';Label='Vista previa de reglas salientes'}
 )
 $i=0
 foreach ($stage in $stages) {
@@ -44,6 +48,8 @@ foreach ($stage in $stages) {
             Tasks {$result=@(Get-PCADTasks);break}
             Historico {$result=@(Get-PCADLegacyOverview -Firewall @($sections['Firewall']) -Tasks @($sections['Tasks']));break}
             Connections {$result=@(Get-PCADConnections -Processes @($sections['Processes']));break}
+            NetworkOverview {$result=@(Get-PCADNetworkOverview -Processes @($sections['Processes']) -Connections @($sections['Connections']));break}
+            PolicyPreview {$result=@(New-PCADRulePlan -Catalog @($sections['Catalog']) -CheckExisting);break}
         }
         $sections[$key]=@($result)
         [void]$checks.Add([pscustomobject]@{
@@ -107,6 +113,6 @@ if (!$NoExport) {
 Write-Host ''
 Write-Host ('Estado: {0}' -f $overall)
 if ($folder) {Write-Host ('Informes locales: {0}' -f $folder)}
-Write-Host 'F0 no creo ni retiro ninguna regla de firewall.'
+Write-Host 'ParcheCAD F0-F4 no creo ni retiro ninguna regla durante este diagnostico.'
 if ($errors -gt 0) {exit 2}
 exit 0
