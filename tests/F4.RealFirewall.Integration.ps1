@@ -66,13 +66,21 @@ try {
     Write-PCADJournal -Journal $fixture -File $manifestCrash
     New-NetFirewallRule -Name $ruleName -DisplayName 'ParcheCAD 4.0 - AutoCAD 2023 - acad.exe' -Group 'PCAD4_MANAGED' -Program $exe -Direction Outbound -Action Block -Enabled True -Profile Any -PolicyStore PersistentStore -ErrorAction Stop | Out-Null
     if((Get-PCADActualRuleStatus -RuleName $ruleName -Program $exe).State -ne 'EXISTS_VALID'){throw 'No se creo regla temporal del escenario interrumpido.'}
-    $recoverCrash=Invoke-PCADRollbackRules -JournalPath $manifestCrash -Commit
-    if($recoverCrash.Status -ne 'ROLLED_BACK' -or $recoverCrash.Removed -ne 1){throw 'No se recupero regla real con journal CREATING.'}
+    # The interrupted transaction is recovered by a NEW PowerShell process,
+    # importing project modules from GitHub exactly as after relaunching PCAD.
+    $child=Join-Path $root 'tests\F10.Recover.Child.ps1'
+    $psExe=Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    & $psExe -NoLogo -NoProfile -ExecutionPolicy RemoteSigned -File $child -JournalPath $manifestCrash -ExpectedRule $ruleName -ExpectedProgram $exe
+    if($LASTEXITCODE -ne 0){throw 'F10: independent recovery process returned a failure.'}
+    $recovered=Get-Content -LiteralPath $manifestCrash -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+    if([string]$recovered.Status -cne 'ROLLED_BACK' -or [string]$recovered.Operations[0].State -cne 'ROLLED_BACK'){
+        throw 'F10: independent process did not persist recovered journal.'
+    }
     if((Get-PCADActualRuleStatus -RuleName $ruleName -Program $exe).State -ne 'MISSING'){throw 'Regla permanecio tras recuperacion interrumpida.'}
     # El mismo journal recuperado no debe volver a retirar reglas.
     $again=Invoke-PCADRollbackRules -JournalPath $manifestCrash -Commit
     if($again.Removed -ne 0){throw 'Rollback interrumpido no fue idempotente.'}
-    Write-Host 'PASS REAL: recuperacion tras interrupcion CREATING, sin ejecutable y sin reglas residuales.' -ForegroundColor Green
+    Write-Host 'PASS REAL F10: recuperacion en nuevo proceso tras interrupcion simulada CREATING, sin ejecutable y sin reglas residuales.' -ForegroundColor Green
 
 } finally {
     if($ruleName) {
