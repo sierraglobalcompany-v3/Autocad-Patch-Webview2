@@ -70,7 +70,7 @@ function Invoke-PCADRollbackRules {
             [void]$results.Add("Rollback OK: $($entry.RuleName)")
         }catch{
             $entry.State='ROLLBACK_ERROR'
-            [void]$results.Add("Rollback ERROR: $($entry.RuleName) / $($_.Exception.GetType().Name)")
+            [void]$results.Add(("Rollback ERROR: {0} / {1} / {2}" -f $entry.RuleName,$_.Exception.GetType().Name,(Protect-PCADPath -Path $_.Exception.Message)))
         }
         Write-PCADJournal -Journal $journal -File $JournalPath
     }
