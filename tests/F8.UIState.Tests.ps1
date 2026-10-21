@@ -40,7 +40,8 @@ $good.Result='PARCIAL_NO_VERIFICADO'
 Assert-F8 (!(Get-PCADReportUiState -Report $good -ExitCode 0).Complete) 'reported partial despite exit zero'
 $good.Result='DIAGNOSTICO_COMPLETADO_SIN_CAMBIOS'
 $good.Sections.Historico[0].Recovery.Status='PARCIAL'
-Assert-F8 (!(Get-PCADReportUiState -Report $good -ExitCode 0).CanApply) 'rollback pending'
+$pending=Get-PCADReportUiState -Report $good -ExitCode 0
+Assert-F8 (!$pending.CanApply -and !$pending.Complete) 'rollback pending must not be shown COMPLETE'
 $good.Sections.Historico[0].Recovery.Status='OK'
 $good.Sections.PolicyPreview[0].Conflicts=1
 Assert-F8 (!(Get-PCADReportUiState -Report $good -ExitCode 0).CanApply) 'plan collision'
