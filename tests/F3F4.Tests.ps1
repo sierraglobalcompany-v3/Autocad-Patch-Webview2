@@ -52,16 +52,19 @@ try {
     $script:FailOnHelper=$false
     function Test-PCADAdministrator {return $true}
     function Get-NetFirewallRule {
-        param($Name,$PolicyStore,$ErrorAction)
+        [CmdletBinding()]
+        param($Name,$PolicyStore)
         if($script:fakeRules.ContainsKey([string]$Name)) {return $script:fakeRules[[string]$Name]}
         return $null
     }
     function Get-NetFirewallApplicationFilter {
-        param([Parameter(ValueFromPipeline=$true)]$Rule,$ErrorAction)
+        [CmdletBinding()]
+        param([Parameter(ValueFromPipeline=$true)]$Rule)
         process {if($null -ne $Rule){return [pscustomobject]@{Program=$Rule.Program}}}
     }
     function New-NetFirewallRule {
-        param($Name,$DisplayName,$Group,$Direction,$Action,$Program,$Enabled,$Profile,$PolicyStore,$ErrorAction)
+        [CmdletBinding()]
+        param($Name,$DisplayName,$Group,$Direction,$Action,$Program,$Enabled,$Profile,$PolicyStore)
         if($script:FailOnHelper -and $Program -match 'helper\.exe$'){throw 'Fallo simulado de alta'}
         if($script:fakeRules.ContainsKey([string]$Name)){throw 'Duplicado de prueba'}
         $script:fakeRules[[string]$Name]=[pscustomobject]@{
@@ -70,7 +73,8 @@ try {
         }
     }
     function Remove-NetFirewallRule {
-        param($Name,$PolicyStore,$ErrorAction)
+        [CmdletBinding()]
+        param($Name,$PolicyStore)
         if(!$script:fakeRules.ContainsKey([string]$Name)){throw 'No existe'}
         $script:fakeRules.Remove([string]$Name)
     }
