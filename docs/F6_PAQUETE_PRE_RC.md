@@ -1,6 +1,6 @@
 # ParcheCAD 4.0 — empaquetado técnico de desarrollo (NO RELEASE)
 
-**Estado:** desarrollo; F6 de empaquetado, pruebas y auditoría en curso. Rama `feat/f6-recovery-package` (PR Draft). No se ha publicado ni aprobado RC1.
+**Estado:** F6 implementada y pruebas automáticas verificadas (CI #49, 4/4 PASS); pruebas de aplicación real AutoCAD pendientes. Rama `feat/f6-recovery-package` (PR Draft). No se ha publicado ni aprobado RC1.
 
 ## Contenido y política de paquete
 
@@ -16,6 +16,15 @@ No incluye registros de usuarios, `informes/`, claves, cachés, archivos de AVG,
 2. Simulación de fallo real entre creación de regla y escritura del journal `CREATED`: una regla temporal Windows queda representada como `CREATING`, y se revierte posteriormente con su identidad comprobada, incluso si falta el EXE.
 3. Construcción repetida del ZIP en Windows; los hashes de los bytes deben coincidir. Extraer a una carpeta temporal, comprobar hashes internos, ejecutar parser y vista previa read-only sobre los archivos extraídos.
 4. Subir a GitHub Actions un **artifact de desarrollo no publicado en Releases** con ZIP y checksum. Mantener todos los PR Draft.
+
+## QA efectivamente realizado
+
+**CI #49: PASS (4/4)** — https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39536342870
+
+- Windows PowerShell 5.1 y PowerShell 7: análisis de sintaxis y fixtures F0–F5 y DisplayIcon.
+- Windows efímero: creación de regla temporal real, idempotencia y recuperación desde journal CREATING después de interrupción **simulada**, sin ejecutable y sin bloqueos residuales.
+- ZIP de desarrollo: dos compilaciones con hash idéntico, lista blanca, SHA256 de cada archivo, checksum ZIP, extracción, ejecución CLI Preview y WinForms SelfTest desde carpeta extraída.
+- El artifact temporal de GitHub Actions se denomina `ParcheCAD_4.0_DEV_NOT_RELEASE`; se guarda con retención limitada, no en GitHub Releases.
 
 ## Límites
 
