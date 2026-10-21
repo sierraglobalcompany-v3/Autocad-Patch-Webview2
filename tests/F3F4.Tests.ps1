@@ -3,7 +3,7 @@ Set-StrictMode -Version 2.0
 $ErrorActionPreference='Stop'
 $root=Split-Path -Parent $PSScriptRoot
 $paths=@('ParcheCAD.Core.ps1','ParcheCAD.Catalogo.ps1','ParcheCAD.Network.ps1',
-         'ParcheCAD.Policy.ps1','ParcheCAD.Firewall.ps1','ParcheCAD.Diagnostico.ps1')
+         'ParcheCAD.Policy.ps1','ParcheCAD.Firewall.ps1','ParcheCAD.Diagnostico.ps1','ParcheCAD.Reglas.ps1','ParcheCAD.Panel.ps1')
 foreach($name in $paths){
     $f=Join-Path (Join-Path $root 'src') $name
     $tokens=$null;$errors=$null
