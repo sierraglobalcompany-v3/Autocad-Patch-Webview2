@@ -28,7 +28,8 @@ $items=@(
     'docs/F5_INTEGRACION_RECUPERACION_QA.md',
     'docs/F6_PAQUETE_PRE_RC.md',
     'docs/F7_FAILCLOSED_GUI_QA.md',
-    'docs/F8_UISTATE_QA.md'
+    'docs/F8_UISTATE_QA.md',
+    'docs/F9_WINFORMS_EVENT_QA.md'
 ) | Sort-Object
 foreach($name in $items){
     if($name -notmatch '^[a-zA-Z0-9_/.-]+$' -or $name -match '(?:^|/)\.\.(?:/|$)') {
