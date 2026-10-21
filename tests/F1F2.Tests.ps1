@@ -2,7 +2,7 @@
 Set-StrictMode -Version 2.0
 $ErrorActionPreference='Stop'
 $root=Split-Path -Parent $PSScriptRoot
-foreach($name in @('ParcheCAD.Core.ps1','ParcheCAD.Catalogo.ps1','ParcheCAD.Historico.ps1','ParcheCAD.Diagnostico.ps1')){
+foreach($name in @('ParcheCAD.Core.ps1','ParcheCAD.Catalogo.ps1','ParcheCAD.Historico.ps1','ParcheCAD.Diagnostico.ps1','ParcheCAD.Panel.ps1')){
     $file=Join-Path (Join-Path $root 'src') $name
     $tok=$null;$errors=$null
     $null=[Management.Automation.Language.Parser]::ParseFile($file,[ref]$tok,[ref]$errors)
