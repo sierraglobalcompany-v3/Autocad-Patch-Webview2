@@ -31,7 +31,7 @@ No afirmar que «todo Autodesk está desconectado» ni que «AutoCAD no usa WebV
 | F5 | Rutas personalizadas privadas, reportes saneados, evaluación de journal aplicado/incompleto/corrupto | CI y fixtures |
 | F6 | Fallback por DisplayIcon verificando acad.exe; recuperación de journal CREATING con regla temporal real; ZIP DEV determinista con SHA256 | **CI #49 4/4 PASS** |
 | F7 | Fail-closed cuando existen operaciones y archivos de recuperación pendientes; GUI/CLI no aplican nuevas reglas | CI #63 PASS |
-| F8 | Estado único para informes/UI, diez etapas verificadas, salida de proceso coherente y errores de lectura sin falso éxito | **CI #66 4/4 PASS** |
+| F8 | Estado único para informes/UI, diez etapas verificadas, salida de proceso coherente y errores de lectura sin falso éxito | **CI #73 4/4 PASS** |
 
 **CI #63:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39538578854 — PowerShell 5.1, PowerShell 7, integración real sobre regla temporal y construcción/extracción/verificación de ZIP. Se corrigió un fallo de manejo de campos ausentes en WinForms antes de PASS; F6 resolvió el parser DisplayIcon.
 
@@ -88,8 +88,8 @@ PRs apilados #3–#10 **Draft**, sin merge, deploy ni Release. CI verde **no** i
 - **Origen del defecto:** el panel usaba el código de salida para decir COMPLETO aun si el informe era parcial/insuficiente. Existían tres validaciones independientes de Aplicar, Vista previa y resultado.
 - **Corrección integrada:** `src/ParcheCAD.UIState.ps1` define la validación única y pura; `ParcheCAD.Panel.ps1` la consume para texto de estado y botones. No servicios, drivers ni procesos residentes nuevos.
 - **Invariantes:** ExitCode=0; Tool=ParcheCAD, esquema 1, ReadOnly=true; resultado completo; diez etapas identificadas y cada una OK; recuperación sana; vista previa PLAN_NO_APLICADO con candidatos y sin conflictos.
-- **Fallo seguro:** JSON incompleto, secciones ausentes, duplicación de etapa, código no cero, proceso activo o journal pendiente: no se habilita Aplicar ni se muestra diagnóstico completo.
-- **QA automática:** `tests/F8.UIState.Tests.ps1` en PS5.1/7; WinForms SelfTest; ZIP reproducible con módulo UIState incluido y ejecutable desde extracción; regla temporal Windows y rollback sin AutoCAD real. **CI #66 PASS 4/4:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39539739149
+- **Fallo seguro:** JSON incompleto, secciones ausentes, duplicación de etapa, código no cero, proceso activo o journal pendiente: no se habilita Aplicar ni se muestra diagnóstico completo, incluso si el propio JSON declara otras etapas OK.
+- **QA automática:** `tests/F8.UIState.Tests.ps1` en PS5.1/7; WinForms SelfTest; ZIP reproducible con módulo UIState incluido y ejecutable desde extracción; regla temporal Windows y rollback sin AutoCAD real. **CI #73 PASS 4/4:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39540161818
 - **Nota sobre QA:** fallo de parser inicial al integrar expresiones de formato multilineales, resuelto simplificando la presentación en el origen y repitiendo CI; la interfaz aún no ha superado QA de clics reales.
 - **Documentos:** `docs/F8_UISTATE_QA.md`, README y SPEC actualizados. Artifact GitHub DEV no es release.
 - **BLOQUEOS:** QA escritorio interactivo/UAC, interrupción física/reinicio, AutoCAD instalado 2023–2027, medición de tráfico Autodesk compartido y objetivo WebView2 sin ejecución **NO RESUELTO**.
