@@ -69,8 +69,10 @@ try {
     Write-Host 'PASS F15: no junction traversal, reject forged firewall path, allow exact own-rule rollback.' -ForegroundColor Green
 }finally{
     # Junction points must be removed WITHOUT deleting the external target.
-    if(Test-Path -LiteralPath $junction){Remove-Item -LiteralPath $junction -Force -ErrorAction Stop}
+    # Windows PowerShell 5.1 Remove-Item on junction may throw or traverse it.
+    # .NET deletes the directory REPARSE ENTRY only (non-recursive), never target.
+    if([IO.Directory]::Exists($junction)){[IO.Directory]::Delete($junction,$false)}
     $linkedRoot=Join-Path $work 'AutoCAD 2026'
-    if(Test-Path -LiteralPath $linkedRoot){Remove-Item -LiteralPath $linkedRoot -Force -ErrorAction Stop}
+    if([IO.Directory]::Exists($linkedRoot)){[IO.Directory]::Delete($linkedRoot,$false)}
     if(Test-Path -LiteralPath $work -PathType Container){Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction Stop}
 }
