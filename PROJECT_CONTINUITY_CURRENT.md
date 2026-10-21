@@ -48,5 +48,17 @@ Rama de solo documentación PR #2 Draft: 10 pasadas y plan F0–F6, sin merge. S
 - El QA real en PC con AutoCAD queda como **prueba de aceptación de una versión candidata integrada**, no como requisito para empezar F1.
 - La 4.0 no se declara lista para producción hasta QA final; si el aislamiento exclusivo WebView2 no resulta técnicamente demostrable, debe quedar explícito y no bloquear globalmente por defecto.
 
+## F3/F4 — avance actual en PR #5 Draft
+
+- **F3 OBSERVACIÓN:** implementado `src/ParcheCAD.Network.ps1`; atribución WebView2 por proceso padre/UDF = PROBABLE/INDETERMINADA, no garantía de aislamiento.
+- **F4 POLICY/PREVIEW:** implementado `src/ParcheCAD.Policy.ps1` y `src/ParcheCAD.Reglas.ps1`; vista previa sin escritura, IDs deterministas y rechazo de rutas no exclusivas de AutoCAD 2023–2027.
+- **F4 APLICAR/REVERTIR:** funciones implementadas `src/ParcheCAD.Firewall.ps1` con admin + -Commit, journal de cambios y compensación sobre errores. Solo simuladas en CI; no aprobadas sobre firewall real.
+- Diagnóstico de **10 etapas**; panel WinForms muestra resumen de atribución WebView2 y vista previa F4, mantiene operación **solo lectura**.
+- **CI:** PASS Windows PowerShell 5.1 y 7 en ejecución https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39529793461. Smoke de diagnóstico + preview Windows sin AutoCAD PASS; pruebas mock aplicación/rollback/conflictos/idempotencia PASS.
+- Documento: `docs/F3F4_IMPLEMENTACION_QA.md`.
+- PR #5 apilado sobre PR #4, que depende de PR #3. Todos Draft, no merge a main.
+- Bloqueo exclusivo de WebView2 de AutoCAD **NO RESUELTO**. La política F4 excluye `msedgewebview2.exe` compartido para proteger WhatsApp/Correo.
+- UI gráfica **no certificada visualmente**; QA Windows real de regla/reversión **PENDIENTE**.
+
 ## NEXT — único y accionable
-**F3/F4 desarrollo sin intervencion del usuario:** investigar atribucion WebView2 y desarrollar planificador idempotente de reglas por ejecutable, backup y rollback (sin bloquear WebView2 compartido por defecto). Acompanarlo de tests en Windows y QA de mutaciones en VM aislada. Integrar controles en el panel solo cuando su motor tenga puertas PASS. Reservar prueba de usuario para RC1 integral. Mantener PR #3 y #4 Draft, sin merge.
+**F4 GUI + QA DE MUTACIÓN AISLADA:** probar aplicación y reversión en una VM Windows desechable (no la PC del usuario ni el runner compartido), validar rutas, GPO, rollback tras interrupción, firewall inbound/outbound y efectos en otras aplicaciones. Solo después habilitar botones Aplicar/Revertir en WinForms con preview, confirmación y verificación final. Mantener PR #3/#4/#5 Draft, no merge. Preparar RC1 integral antes de solicitar prueba del usuario.
