@@ -298,68 +298,70 @@ $form.Add_FormClosing({
 })
 $form.Add_Shown({if(!$InteractionSelfTest){PCAD-Begin}})
 if($InteractionSelfTest){
-    # This exercises WinForms event handlers in STA with real child process
-    # for READ-ONLY diagnostics and dummy processes for cancel/close. No UAC.
+    # F9 CI: WinForms EVENT integration without requiring a desktop session.
+    # GitHub-hosted Windows actions are not guaranteed to expose an interactive
+    # desktop. OnClick reflection dispatches the same registered button handlers.
+    # The real diagnostic child is read-only; dummy child processes simulate
+    # Cancel and administrative-close lifecycle, with zero firewall writes.
     $createdRunRoot=''
+    $binding=[Reflection.BindingFlags]::Instance -bor [Reflection.BindingFlags]::NonPublic
+    function Invoke-PCADClick([Windows.Forms.Button]$Button){
+        $onClick=$Button.GetType().GetMethod('OnClick',$binding)
+        if($null -eq $onClick){throw 'F9: cannot resolve button OnClick handler'}
+        $null=$onClick.Invoke($Button,[object[]]@([EventArgs]::Empty))
+    }
     try {
-        $form.Show()
-        [Windows.Forms.Application]::DoEvents()
-        if(!$form.Visible -or !$start.Enabled -or $apply.Enabled){throw 'F9: form not visible or unsafe initial buttons'}
-        $start.PerformClick()
-        [Windows.Forms.Application]::DoEvents()
-        if($null -eq $script:Proc -or !$cancel.Enabled -or $apply.Enabled){throw 'F9: Start click did not start read-only child'}
+        if($apply.Enabled -or !$start.Enabled){throw 'F9: initial action state unsafe'}
+        Write-Host 'F9: dispatch Analyze handler without displaying a desktop window.'
+        Invoke-PCADClick -Button $start
+        if($null -eq $script:Proc -or !$cancel.Enabled -or $apply.Enabled){throw 'F9: Analyze did not start read-only child'}
         $createdRunRoot=$script:RunRoot
-        $waitStart=Get-Date
-        while($null -ne $script:Proc -and ((Get-Date)-$waitStart).TotalSeconds -lt 100){
-            [Windows.Forms.Application]::DoEvents()
-            Start-Sleep -Milliseconds 100
-        }
-        if($null -ne $script:Proc){throw 'F9: diagnostic did not finish within 100 sec'}
-        if($null -eq $script:LastReport -or $null -eq $script:LastExitCode){throw 'F9: diagnostic produced no report or exit code'}
+        if(!$script:Proc.WaitForExit(65000)){throw 'F9: read-only diagnostic child exceeded 65 seconds'}
+        PCAD-Finish
+        if($null -eq $script:LastReport -or $null -eq $script:LastExitCode){throw 'F9: no report or exit code'}
         $ui=Get-PCADReportUiState -Report $script:LastReport -ExitCode $script:LastExitCode
-        if(!$start.Enabled -or $cancel.Enabled -or $apply.Enabled){throw 'F9: empty Windows unexpectedly allows Apply or Cancel after finish'}
-        if($status.Text -ne $ui.Description){throw 'F9: header disagrees with validated diagnostic state'}
-        Write-Host ('F9 PASS: actual button Start -> read-only child -> report -> safe GUI status ({0}).' -f $ui.Result)
+        if(!$start.Enabled -or $cancel.Enabled -or $apply.Enabled){throw 'F9: wrong controls after read-only diagnostic on clean runner'}
+        if($status.Text -cne $ui.Description){throw 'F9: GUI header disagrees with validator'}
+        Write-Host ('F9 PASS: Analyze handler -> read-only Windows child -> report -> safe status ({0}).' -f $ui.Result)
 
-        # Cancel an owned dummy sleep child using the real Cancel button.
+        Write-Host 'F9: dispatch Cancel handler against an owned dummy sleeping process.'
         $script:LastReport=$null;$script:LastExitCode=$null
         $script:Proc=Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList '-NoLogo -NoProfile -Command "Start-Sleep -Seconds 30"' -PassThru -WindowStyle Hidden -ErrorAction Stop
         PCAD-Busy $true
-        [Windows.Forms.Application]::DoEvents()
-        if(!$cancel.Enabled -or $apply.Enabled){throw 'F9: Cancel disabled or Apply enabled during active child'}
-        $cancel.PerformClick()
-        [Windows.Forms.Application]::DoEvents()
+        if(!$cancel.Enabled -or $apply.Enabled){throw 'F9: cancel disabled while read-only child running'}
+        Invoke-PCADClick -Button $cancel
         if($null -ne $script:Proc -or $cancel.Enabled -or $apply.Enabled -or $status.Text -notmatch 'CANCELADO'){
-            throw 'F9: Cancel did not terminate owned read-only process and reset buttons'
+            throw 'F9: cancel handler failed to release owned process and reset controls'
         }
-        Write-Host 'F9 PASS: Cancel click terminates only the owned diagnostic fixture.'
+        Write-Host 'F9 PASS: Cancel handler closed only its owned dummy child.'
 
-        # Simulate an administrative process without elevation or firewall.
-        # Close must be denied while a process flagged as admin is running.
+        Write-Host 'F9: exercise FormClosing handler against a dummy admin placeholder (no UAC).'
         $script:AdminProc=Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList '-NoLogo -NoProfile -Command "Start-Sleep -Seconds 30"' -PassThru -WindowStyle Hidden -ErrorAction Stop
         PCAD-Busy $true
-        [Windows.Forms.Application]::DoEvents()
-        if($cancel.Enabled -or $apply.Enabled -or $rollback.Enabled){throw 'F9: modifications/cancel enabled with admin process'}
-        $form.Close()
-        [Windows.Forms.Application]::DoEvents()
-        if($form.IsDisposed){throw 'F9: form closed while administrative placeholder was running'}
+        if($cancel.Enabled -or $apply.Enabled -or $rollback.Enabled){throw 'F9: mutating controls enabled during simulated administration'}
+        $onFormClosing=[Windows.Forms.Form].GetMethod('OnFormClosing',$binding)
+        if($null -eq $onFormClosing){throw 'F9: cannot resolve FormClosing'}
+        $closing=[Windows.Forms.FormClosingEventArgs]::new([Windows.Forms.CloseReason]::UserClosing,$false)
+        $null=$onFormClosing.Invoke($form,[object[]]@($closing))
+        if(!$closing.Cancel){throw 'F9: FormClosing was not canceled during simulated admin process'}
         $script:AdminProc.Refresh()
         if(!$script:AdminProc.HasExited){$script:AdminProc.Kill()}
         $script:AdminProc.WaitForExit(5000) | Out-Null
         $script:AdminProc.Dispose();$script:AdminProc=$null
         PCAD-Busy $false
-        Write-Host 'F9 PASS: window refuses close during simulated admin operation.'
-        $form.Close()
-        if(!$form.IsDisposed){$form.Dispose()}
-        Write-Host 'PASS F9: interactive WinForms buttons and lifecycle, no firewall or UAC changes.' -ForegroundColor Green
+        $closing2=[Windows.Forms.FormClosingEventArgs]::new([Windows.Forms.CloseReason]::UserClosing,$false)
+        $null=$onFormClosing.Invoke($form,[object[]]@($closing2))
+        if($closing2.Cancel){throw 'F9: FormClosing stays blocked after admin placeholder ends'}
+        Write-Host 'F9 PASS: FormClosing denied with active admin placeholder, allowed after exit.'
+        Write-Host 'PASS F9: WinForms event handlers validated headlessly, UAC/visual QA remain pending.' -ForegroundColor Green
         exit 0
     } finally {
         $timer.Stop()
         foreach($name in @('Proc','AdminProc')){
             $p=Get-Variable -Name $name -Scope Script -ValueOnly -ErrorAction SilentlyContinue
             if($null -ne $p){
-                try {$p.Refresh();if(!$p.HasExited){$p.Kill();$p.WaitForExit(5000)|Out-Null}} catch{}
-                try {$p.Dispose()} catch{}
+                try {$p.Refresh();if(!$p.HasExited){$p.Kill();$p.WaitForExit(5000)|Out-Null}}catch{}
+                try {$p.Dispose()}catch{}
                 Set-Variable -Name $name -Scope Script -Value $null
             }
         }
