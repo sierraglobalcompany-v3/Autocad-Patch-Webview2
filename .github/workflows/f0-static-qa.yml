@@ -1,4 +1,4 @@
-name: ParcheCAD Windows QA (F0-F15)
+name: ParcheCAD Windows QA (F0-F16)
 on:
   pull_request:
   push:
