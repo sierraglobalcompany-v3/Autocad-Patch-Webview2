@@ -21,6 +21,13 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           & .\src\ParcheCAD.Diagnostico.ps1 -NoExport
+      - name: WinForms construction and control safety smoke (no UI interaction)
+        shell: powershell
+        timeout-minutes: 3
+        run: |
+          $ErrorActionPreference='Stop'
+          & "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -STA -File .\src\ParcheCAD.Panel.ps1 -SelfTest
+          if($LASTEXITCODE -ne 0) { throw "WinForms selftest error $LASTEXITCODE" }
       - name: Firewall preview smoke (read-only, no AutoCAD)
         shell: powershell
         timeout-minutes: 4
@@ -38,3 +45,16 @@ jobs:
           & .\tests\F0.Tests.ps1
           & .\tests\F1F2.Tests.ps1
           & .\tests\F3F4.Tests.ps1
+
+  f4-real-firewall-ephemeral:
+    # Strictly hosted throwaway Windows VM; fixture is a copy of whoami.exe in TEMP.
+    # No AutoCAD files, shared WebView2, third-party rules or production systems touched.
+    runs-on: windows-2022
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply and revert ONLY a temporary test-program firewall rule
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          & .\tests\F4.RealFirewall.Integration.ps1

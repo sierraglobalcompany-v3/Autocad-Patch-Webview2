@@ -87,14 +87,20 @@ function New-PCADRulePlan {
             $ruleName=Get-PCADRuleName -Program $path
             $item=[pscustomobject]@{
                 RuleName=$ruleName;Group='PCAD4_MANAGED';Year=$year
-                Program=$path;DisplayName=('ParcheCAD 4.0 | AutoCAD '+$year+' | '+[IO.Path]::GetFileName($path))
+                Program=$path;DisplayName=('ParcheCAD 4.0 - AutoCAD '+$year+' - '+[IO.Path]::GetFileName($path))
                 Direction='Outbound';Action='Block';Profile='Any'
                 Existing='NO_COMPROBADO';Assessment='CANDIDATO'
             }
             if($CheckExisting) {
-                $status=Get-PCADActualRuleStatus -RuleName $ruleName -Program $path
-                $item.Existing=$status.State
-                $item.Assessment=if($status.State -eq 'CONFLICT') {'NO_APLICAR'} else {'CANDIDATO'}
+                try {
+                    $status=Get-PCADActualRuleStatus -RuleName $ruleName -Program $path
+                    $item.Existing=$status.State
+                    $item.Assessment=if($status.State -eq 'CONFLICT') {'NO_APLICAR'} else {'CANDIDATO'}
+                } catch {
+                    # No convertir un error de permisos o consulta en "MISSING".
+                    $item.Existing='ERROR_INSPECCION'
+                    $item.Assessment='NO_APLICAR'
+                }
             }
             [void]$included.Add($item)
         } catch {

@@ -10,7 +10,7 @@ function Test-PCADAdministrator {
     } catch {return $false}
 }
 function Assert-PCADManagedEntry {
-    param($Entry)
+    param($Entry,[switch]$AllowMissingFile)
     if($null -eq $Entry){throw 'Falta entrada de regla.'}
     $program=Get-PCADCanonicalProgram -Path ([string]$Entry.Program)
     $year=[int]$Entry.Year
@@ -22,10 +22,12 @@ function Assert-PCADManagedEntry {
         [string]$Entry.Action -cne 'Block' -or [string]$Entry.Profile -cne 'Any') {
         throw 'Parametros de regla fuera de politica.'
     }
-    if(!(Test-Path -LiteralPath $program -PathType Leaf)) {throw 'Archivo de AutoCAD no existe.'}
-    $file=Get-Item -LiteralPath $program -Force -ErrorAction Stop
-    if(($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {throw 'No se aceptan ejecutables enlace.'}
-    if([string]$file.Name -ieq 'msedgewebview2.exe') {throw 'El runtime WebView2 compartido no es elegible.'}
+    if(!$AllowMissingFile -or (Test-Path -LiteralPath $program -PathType Leaf)) {
+        if(!(Test-Path -LiteralPath $program -PathType Leaf)) {throw 'Archivo de AutoCAD no existe.'}
+        $file=Get-Item -LiteralPath $program -Force -ErrorAction Stop
+        if(($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {throw 'No se aceptan ejecutables enlace.'}
+    }
+    if([IO.Path]::GetFileName($program) -ieq 'msedgewebview2.exe') {throw 'El runtime WebView2 compartido no es elegible.'}
     return $program
 }
 function Write-PCADJournal {
@@ -55,18 +57,20 @@ function Invoke-PCADRollbackRules {
     foreach($entry in @($journal.Operations)){
         if([string]$entry.State -notin @('CREATING','CREATED','ROLLBACK_ERROR')){continue}
         try{
-            $null=Assert-PCADManagedEntry -Entry $entry
+            # Revertir tambien despues de desinstalar AutoCAD: la regla puede quedar huerfana.
+            $null=Assert-PCADManagedEntry -Entry $entry -AllowMissingFile
             $before=Get-PCADActualRuleStatus -RuleName ([string]$entry.RuleName) -Program ([string]$entry.Program)
             if($before.State -eq 'EXISTS_VALID') {
                 Remove-NetFirewallRule -Name ([string]$entry.RuleName) -PolicyStore PersistentStore -ErrorAction Stop
-                $after=Get-PCADActualRuleStatus -RuleName ([string]$entry.RuleName) -Program ([string]$entry.Program)
+                $stage='POST_VERIFY'
+            $after=Get-PCADActualRuleStatus -RuleName ([string]$entry.RuleName) -Program ([string]$entry.Program)
                 if($after.State -ne 'MISSING'){throw 'Regla sigue presente luego de la eliminacion.'}
             } elseif($before.State -ne 'MISSING'){throw 'Regla modificada/ajena. No retirar.'}
             $entry.State='ROLLED_BACK';$count++
             [void]$results.Add("Rollback OK: $($entry.RuleName)")
         }catch{
             $entry.State='ROLLBACK_ERROR'
-            [void]$results.Add("Rollback ERROR: $($entry.RuleName) / $($_.Exception.GetType().Name)")
+            [void]$results.Add(("Rollback ERROR: {0} / {1} / {2}" -f $entry.RuleName,$_.Exception.GetType().Name,(Protect-PCADPath -Path $_.Exception.Message)))
         }
         Write-PCADJournal -Journal $journal -File $JournalPath
     }
@@ -113,6 +117,7 @@ function Invoke-PCADApplyPlan {
     }
     Write-PCADJournal -Journal $journal -File $journalPath
     $created=0
+    $stage='APPLY_START'
     try {
         foreach($e in @($journal.Operations)){
             if($e.State -ne 'PENDING'){continue}
@@ -120,8 +125,10 @@ function Invoke-PCADApplyPlan {
             if($state.State -ne 'MISSING'){throw ('Regla cambio antes de aplicar: '+$e.RuleName)}
             $e.State='CREATING'
             Write-PCADJournal -Journal $journal -File $journalPath
+            $stage='NEW_NETFIREWALL_RULE'
             New-NetFirewallRule -Name $e.RuleName -DisplayName $e.DisplayName -Group 'PCAD4_MANAGED' -Direction Outbound -Action Block -Program $e.Program -Enabled True -Profile Any -PolicyStore PersistentStore -ErrorAction Stop | Out-Null
             # Registrar incluso si la validacion posterior falla, para poder revertir.
+            $stage='JOURNAL_CREATED'
             $e.State='CREATED'
             Write-PCADJournal -Journal $journal -File $journalPath
             $after=Get-PCADActualRuleStatus -RuleName $e.RuleName -Program $e.Program
@@ -141,7 +148,7 @@ function Invoke-PCADApplyPlan {
         try{$rollback=Invoke-PCADRollbackRules -JournalPath $journalPath -Commit}catch{}
         return [pscustomobject]@{
             Status=if($null -ne $rollback -and $rollback.Remaining -eq 0){'ERROR_ROLLED_BACK'}else{'ERROR_MANUAL_REVIEW'}
-            Error=$reason;Manifest=$journalPath;Recovery=$rollback;TrafficVerified=$false
+            Error=$reason;ErrorStage=$stage;Manifest=$journalPath;Recovery=$rollback;TrafficVerified=$false
         }
     } finally {Write-Progress -Activity 'ParcheCAD - aplicando reglas propias' -Completed}
 }
