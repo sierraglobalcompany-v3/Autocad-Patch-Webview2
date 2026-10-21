@@ -1,9 +1,9 @@
 # PROJECT_CONTINUITY_CURRENT — ParcheCAD 4.0
 
-**Actualizado:** 2026-10-21. **Estado:** F0–F15 desarrolladas en PRs Draft; **SIN RC1 / RELEASE / DEPLOY / MERGE**.  
+**Actualizado:** 2026-10-21. **Estado:** F0–F16 desarrolladas en PRs Draft; **SIN RC1 / RELEASE / DEPLOY / MERGE**.  
 **Repositorio fuente única:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2  
-**Rama vigente:** `fix/f15-reparse-path-guard` · **PR #17 Draft**, apilado sobre #16→#15→#14→#13→#12→#11→#10→#9→#8→#7→#6→#5→#4→#3. **`main` aún no tiene estas fases.**  
-**CI F15 verificado:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39551110553 — run **#119, 4/4 PASS**; incluye rutas redirigidas, inventario compartido, TCP sintético y rollback. La certificación con AutoCAD real sigue pendiente. No confundir con certificación AutoCAD. Verificar CI sobre último HEAD tras commits de docs.
+**Rama vigente:** `fix/f16-firewall-filter-integrity` · **PR #18 Draft**, apilado sobre #17→#16→#15→#14→#13→#12→#11→#10→#9→#8→#7→#6→#5→#4→#3. **`main` aún no tiene estas fases.**  
+**CI de código F16:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39552336715 (primer CI con filtros y prueba de IP restringida). Verificar SIEMPRE el workflow asociado al HEAD final antes de declarar nuevo checkpoint verde. La certificación con AutoCAD real sigue pendiente. No confundir con certificación AutoCAD. Verificar CI sobre último HEAD tras commits de docs.
 
 ## Objetivo del usuario y límites no negociables
 
@@ -38,7 +38,8 @@ El usuario quiere impedir la conectividad saliente de **AutoCAD 2023–2027 y to
 | F12 | Evaluación de diez puertas RC1 desde diagnósticos antes/después | CI #103 PASS; nunca RC1 automático |
 | F13 | Prueba TCP IPv4 real de EXE ficticio: conexión permitida → bloqueada → restaurada; otro EXE intacto | CI #109 PASS |
 | F14 | Inventario acotado de Autodesk compartido y advertencias de profundidad/cantidad, sin bloqueo automático | CI #117 PASS |
-| **F15** | **Validación de todos los componentes existentes de rutas: sin junction/symlink en plan, Apply y aviso de catálogo parcial** | **CI #119 PASS 4/4** |
+| F15 | Validación de rutas: sin junction/symlink en plan y Apply, avisos de catálogo parcial | CI #124 PASS |
+| **F16** | **Fallo seguro ante filtros NetSecurity restringidos de puertos, IP, servicio e interfaces** | **QA F16 Windows; consultar CI del último HEAD** |
 
 ### F12 — evaluación RC1 disponible
 
@@ -78,9 +79,17 @@ El usuario quiere impedir la conectividad saliente de **AutoCAD 2023–2027 y to
 - **QA:** `tests/F15.ReparseGuard.Tests.ps1` crea junctions reales en TEMP; PS5.1/7, firewall temporal, TCP sintético y ZIP reproducible PASS. La primera ejecución evidenció fallo de limpieza de junction en PS5.1; se corrigió mediante borrado no recursivo sin tocar el destino. Evidencia: `docs/F15_REPARSE_GUARD_QA.md`; CI #119: https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39551110553.
 - **No certifica RC1:** AutoCAD real, servicios compartidos, tráfico TCP/UDP IPv6, WebView2 exclusivo, UAC/DPI, AVG y reboot sin ensayar.
 
+## F16 — último checkpoint de integridad NetSecurity
+
+- **Defecto:** `Get-PCADActualRuleStatus` solo validaba EXE, grupo, salida, Block, Enabled y perfil; los filtros externos podían limitar la regla a un protocolo, IP, puerto, servicio o interfaz y aun recibir `EXISTS_VALID`.
+- **Corrección KISS:** `src/ParcheCAD.Policy.ps1` inspecciona los filtros asociados de puertos, direcciones, servicio, tipo y alias de interfaz; todos requieren `Any` y unicidad. En caso de desviación declara `CONFLICT`; error de inspección es fail-closed, no `MISSING`.
+- **Pruebas:** `tests/F3F4.Tests.ps1` introduce drifts de TCP, IP, Spooler, Wireless y Ethernet; `tests/F4.RealFirewall.Integration.ps1` modifica **solo una regla propia temporal** a IP `192.0.2.77`, exige CONFLICT y restaura `Any` en finally; tests F13 TCP y rollback siguen transversales. Documentación `docs/F16_INTEGRIDAD_FILTROS_FIREWALL.md`.
+- **Alcance honesto:** regla local válida no implica tráfico Autodesk totalmente aislado si hay GPO, servicios/proxies, WebView2 Microsoft compartido o reglas ajenas. AutoCAD 2023–2027 real, UAC visual, AVG y reinicio no ensayados.
+- **PR #18 Draft**, sin merge ni RC1. El workflow Windows F0–F16 y ZIP DEV mantienen fuente reproducible.
+
 ## Reconstrucción desde GitHub
 
-Clonar exactamente la **rama F15**, leer `PROJECT_CONTINUITY_CURRENT.md` + `docs/SPEC_MAESTRA.md` + `docs/F12_GATE_RC1_QA_INTEGRADA.md`, ejecutar GitHub Actions y revisar 4/4 jobs. El artifact temporal `ParcheCAD_4.0_DEV_NOT_RELEASE` contiene ZIP allowlist y SHA256; **NO es instalador RC1 ni está listo para Apply en PC principal**. Ningún JSON local antiguo es necesario para reconstruir el software.
+Clonar exactamente la **rama F16**, leer `PROJECT_CONTINUITY_CURRENT.md` + `docs/SPEC_MAESTRA.md` + `docs/F12_GATE_RC1_QA_INTEGRADA.md`, ejecutar GitHub Actions y revisar 4/4 jobs. El artifact temporal `ParcheCAD_4.0_DEV_NOT_RELEASE` contiene ZIP allowlist y SHA256; **NO es instalador RC1 ni está listo para Apply en PC principal**. Ningún JSON local antiguo es necesario para reconstruir el software.
 
 ## Qué bloquea RC1
 
