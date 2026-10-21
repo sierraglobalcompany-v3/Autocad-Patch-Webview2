@@ -38,6 +38,7 @@ $items=@(
     'docs/F13_PRUEBA_EGRESO_TCP_REAL.md',
     'docs/F14_INVENTARIO_COMPARTIDO_QA.md',
     'docs/F15_REPARSE_GUARD_QA.md',
+    'docs/F16_INTEGRIDAD_FILTROS_FIREWALL.md',
     'tools/Invoke-ParcheCADRC12.ps1'
 ) | Sort-Object
 foreach($name in $items){

@@ -38,6 +38,31 @@ try {
     if($res.Status -ne 'APPLIED' -or $res.Created -ne 1){throw 'Fallo en aplicacion real.'}
     $verified=Get-PCADActualRuleStatus -RuleName $ruleName -Program $exe
     if($verified.State -ne 'EXISTS_VALID'){throw 'La regla real creada no se pudo verificar.'}
+    # F16: a rule may look valid by Name/Program yet restrict the remote IP.
+    # Mutate ONLY our temporary fixture and restore it in finally. An
+    # altered filter must prevent idempotent acceptance, not be overwritten.
+    $myRule=Get-NetFirewallRule -Name $ruleName -PolicyStore PersistentStore -ErrorAction Stop
+    $addressFilter=$myRule | Get-NetFirewallAddressFilter -ErrorAction Stop
+    try {
+        $addressFilter | Set-NetFirewallAddressFilter -RemoteAddress '192.0.2.77' -ErrorAction Stop
+        $narrow=Get-PCADActualRuleStatus -RuleName $ruleName -Program $exe
+        if($narrow.State -cne 'CONFLICT'){
+            throw ('F16: narrowed RemoteAddress incorrectly accepted as '+$narrow.State)
+        }
+        $driftPlan=New-PCADRulePlan -Catalog @([pscustomobject]@{
+            Name='acad.exe';Path=$exe;Year=2023
+            Classification='AUTOCAD_PRODUCTO';Policy='SOLO_INVENTARIO'
+        }) -CheckExisting
+        if($driftPlan.Conflicts -ne 1 -or $driftPlan.State -cne 'CONFLICT'){
+            throw 'F16: narrowed rule did not block the preview/apply plan.'
+        }
+        Write-Host 'F16 PASS: remote-IP-only firewall rule reports CONFLICT (never EXISTS_VALID).' -ForegroundColor Green
+    } finally {
+        $addressFilter | Set-NetFirewallAddressFilter -RemoteAddress Any -ErrorAction Stop
+        if((Get-PCADActualRuleStatus -RuleName $ruleName -Program $exe).State -cne 'EXISTS_VALID'){
+            throw 'F16: temporary firewall address scope did not restore to Any.'
+        }
+    }
     $second=New-PCADRulePlan -Catalog @([pscustomobject]@{
         Name='acad.exe';Path=$exe;Year=2023;Classification='AUTOCAD_PRODUCTO';Policy='SOLO_INVENTARIO'
     }) -CheckExisting

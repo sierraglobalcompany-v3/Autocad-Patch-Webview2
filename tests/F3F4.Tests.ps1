@@ -62,6 +62,63 @@ try {
         param([Parameter(ValueFromPipeline=$true)]$Rule)
         process {if($null -ne $Rule){return [pscustomobject]@{Program=$Rule.Program}}}
     }
+    function Get-NetFirewallPortFilter {
+        [CmdletBinding()]
+        param([Parameter(ValueFromPipeline=$true)]$Rule)
+        process {
+            if($null -ne $Rule){
+                return [pscustomobject]@{
+                    Protocol=if($Rule.PSObject.Properties['MockProtocol']){$Rule.MockProtocol}else{'Any'}
+                    LocalPort='Any';RemotePort='Any'
+                }
+            }
+        }
+    }
+    function Get-NetFirewallAddressFilter {
+        [CmdletBinding()]
+        param([Parameter(ValueFromPipeline=$true)]$Rule)
+        process {
+            if($null -ne $Rule){
+                return [pscustomobject]@{
+                    LocalAddress='Any'
+                    RemoteAddress=if($Rule.PSObject.Properties['MockRemoteAddress']){$Rule.MockRemoteAddress}else{'Any'}
+                }
+            }
+        }
+    }
+    function Get-NetFirewallServiceFilter {
+        [CmdletBinding()]
+        param([Parameter(ValueFromPipeline=$true)]$Rule)
+        process {
+            if($null -ne $Rule){
+                return [pscustomobject]@{
+                    Service=if($Rule.PSObject.Properties['MockService']){$Rule.MockService}else{'Any'}
+                }
+            }
+        }
+    }
+    function Get-NetFirewallInterfaceTypeFilter {
+        [CmdletBinding()]
+        param([Parameter(ValueFromPipeline=$true)]$Rule)
+        process {
+            if($null -ne $Rule){
+                return [pscustomobject]@{
+                    InterfaceType=if($Rule.PSObject.Properties['MockInterfaceType']){$Rule.MockInterfaceType}else{'Any'}
+                }
+            }
+        }
+    }
+    function Get-NetFirewallInterfaceFilter {
+        [CmdletBinding()]
+        param([Parameter(ValueFromPipeline=$true)]$Rule)
+        process {
+            if($null -ne $Rule){
+                return [pscustomobject]@{
+                    InterfaceAlias=if($Rule.PSObject.Properties['MockInterfaceAlias']){$Rule.MockInterfaceAlias}else{'Any'}
+                }
+            }
+        }
+    }
     function New-NetFirewallRule {
         [CmdletBinding()]
         param($Name,$DisplayName,$Group,$Direction,$Action,$Program,$Enabled,$Profile,$PolicyStore)
@@ -97,6 +154,25 @@ try {
     $conflicted=New-PCADRulePlan -Catalog $catalog -CheckExisting
     Assert-F34 ($conflicted.Conflicts -eq 1) 'F4 foreign collision'
     $script:fakeRules.Clear()
+    # F16: identical primary rule metadata is NOT sufficient if a filter
+    # narrows to TCP, a single destination, an app service or an interface.
+    foreach($drift in @(
+        @{MockProtocol='TCP'},@{MockRemoteAddress='192.0.2.10'},
+        @{MockService='Spooler'},@{MockInterfaceType='Wireless'},
+        @{MockInterfaceAlias='Ethernet'}
+    )){
+        $one=$plan.Entries[0]
+        $rule=[pscustomobject]@{
+            Name=$one.RuleName;Group='PCAD4_MANAGED';Program=$one.Program
+            Action='Block';Direction='Outbound';Enabled='True';Profile='Any'
+        }
+        foreach($key in $drift.Keys){$rule|Add-Member -NotePropertyName $key -NotePropertyValue $drift[$key]}
+        $script:fakeRules[[string]$one.RuleName]=$rule
+        Assert-F34 ((Get-PCADActualRuleStatus -RuleName $one.RuleName -Program $one.Program).State -eq 'CONFLICT') ('F16 narrowed filter rejected '+($drift.Keys -join ','))
+        $collision=New-PCADRulePlan -Catalog $catalog -CheckExisting
+        Assert-F34 ($collision.Conflicts -eq 1) ('F16 narrowed filter is blocking conflict '+($drift.Keys -join ','))
+        $script:fakeRules.Clear()
+    }
     # Fallo a mitad: compensación de reglas propias creadas.
     $script:FailOnHelper=$true
     $failed=Invoke-PCADApplyPlan -Plan $plan -BackupDirectory $backup -Commit
