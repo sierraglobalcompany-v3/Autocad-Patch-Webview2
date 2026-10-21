@@ -27,7 +27,7 @@ function Assert-PCADManagedEntry {
         $file=Get-Item -LiteralPath $program -Force -ErrorAction Stop
         if(($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {throw 'No se aceptan ejecutables enlace.'}
     }
-    if([string]$file.Name -ieq 'msedgewebview2.exe') {throw 'El runtime WebView2 compartido no es elegible.'}
+    if([IO.Path]::GetFileName($program) -ieq 'msedgewebview2.exe') {throw 'El runtime WebView2 compartido no es elegible.'}
     return $program
 }
 function Write-PCADJournal {
