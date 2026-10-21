@@ -78,10 +78,10 @@ function Get-PCADInstallations {
 function Get-PCADProcessClass {
     param([string]$Name,[string]$Path,[string]$Parent,[string]$UserData)
     if ($Name -match '(?i)^msedgewebview2\.exe$') {
-        $host='INDETERMINADA'
-        if ($Parent -match '(?i)^acad\.exe$' -or $UserData -match '(?i)AutoCAD 202[3-7]') { $host='AUTOCAD_PROBABLE' }
-        elseif ($Parent -match '(?i)^(Adsk|Autodesk)') { $host='AUTODESK_COMPARTIDO_PROBABLE' }
-        return [pscustomobject]@{Category='WEBVIEW2_COMPARTIDO'; Attribution=$host}
+        $hostAttribution='INDETERMINADA'
+        if ($Parent -match '(?i)^acad\.exe$' -or $UserData -match '(?i)AutoCAD 202[3-7]') { $hostAttribution='AUTOCAD_PROBABLE' }
+        elseif ($Parent -match '(?i)^(Adsk|Autodesk)') { $hostAttribution='AUTODESK_COMPARTIDO_PROBABLE' }
+        return [pscustomobject]@{Category='WEBVIEW2_COMPARTIDO'; Attribution=$hostAttribution}
     }
     if ($Name -match '(?i)^acad\.exe$' -or $Path -match '(?i)\\Autodesk\\AutoCAD 202[3-7]\\') {
         return [pscustomobject]@{Category='AUTOCAD_PRODUCTO'; Attribution='RUTA_O_NOMBRE'}
