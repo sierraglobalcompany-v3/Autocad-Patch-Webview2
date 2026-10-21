@@ -37,7 +37,7 @@ $form.FormBorderStyle='FixedSingle';$form.MaximizeBox=$false
 $form.StartPosition='CenterScreen';$form.BackColor=[Drawing.Color]::White
 $form.Font=New-Object Drawing.Font('Segoe UI',10)
 $header=PCAD-Label 'ParcheCAD 4.0 | Control y diagnostico' 20 18 905 38 18
-$sub=PCAD-Label 'F1/F2 - Sin modificaciones al firewall, registro, servicios ni tareas.' 20 61 905 28
+$sub=PCAD-Label 'Diagnostico de solo lectura. Los cambios requieren autorizacion administrativa expresa.' 20 61 905 28
 $sub.ForeColor=[Drawing.Color]::DimGray
 $installed=PCAD-Label 'AutoCAD 2023-2027: pendiente de detectar' 20 109 905 31 12
 $webview=PCAD-Label 'WebView2 compartido: pendiente de detectar' 20 147 905 30
@@ -75,7 +75,8 @@ function PCAD-Busy([bool]$Busy) {
     $plans=@()
     if($null -ne $script:LastReport){$plans=@($script:LastReport.Sections.PolicyPreview | Where-Object {$null -ne $_})}
     $ready=($plans.Count -gt 0 -and [int]$plans[0].Count -gt 0 -and [int]$plans[0].Conflicts -eq 0)
-    $apply.Enabled=(-not $Busy) -and $ready -and (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'ParcheCAD.Reglas.ps1') -PathType Leaf)
+    $reportComplete=($null -ne $script:LastReport -and $script:LastReport.Result -eq 'DIAGNOSTICO_COMPLETADO_SIN_CAMBIOS')
+    $apply.Enabled=(-not $Busy) -and $ready -and $reportComplete -and (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'ParcheCAD.Reglas.ps1') -PathType Leaf)
     $rollback.Enabled=(-not $Busy) -and (Test-Path -LiteralPath (Join-Path $script:Reports 'operaciones') -PathType Container)
 }
 function PCAD-ReadLog([string]$File) {
@@ -131,6 +132,10 @@ function PCAD-Finish {
         $lines.Add(('Vista previa F4: {0} reglas candidatas, {1} conflictos, {2} excluidos; NINGUNA regla aplicada' -f $preview[0].Count,$preview[0].Conflicts,@($preview[0].Excluded).Count))
     }
     foreach($c in @($data.Checks)){$lines.Add(("{0}: {1} ({2}) {3}" -f $c.Section,$c.Status,$c.Count,$c.Detail))}
+    if($historical.Count -gt 0 -and $null -ne $historical[0] -and $null -ne $historical[0].Recovery){
+        $rec=$historical[0].Recovery
+        $lines.Add(('Recuperacion: {0} reglas propias activas, {1} operaciones por revisar, {2} respaldos invalidos / lectura {3}' -f $rec.ActiveRules,$rec.NeedsReview,$rec.Unverified,$rec.Status))
+    }
     $lines.Add('WebView2 de AutoCAD aislado: NO VERIFICADO.')
     $lines.Add(("Informe: {0}" -f $file))
     $details.Text=$lines -join [Environment]::NewLine
@@ -268,7 +273,18 @@ $form.Add_Shown({PCAD-Begin})
 if($SelfTest){
     if(!$form.Controls.Contains($preview) -or !$form.Controls.Contains($apply) -or
        !$form.Controls.Contains($rollback) -or $apply.Enabled -or $rollback.Enabled){throw 'GUI selftest: controls missing or dangerous startup state'}
-    Write-Host 'PASS GUI: form and controls initialized; apply/rollback disabled until diagnostics.'
+    $script:LastReport=[pscustomobject]@{
+        Result='PARCIAL_NO_VERIFICADO'
+        Sections=[pscustomobject]@{PolicyPreview=@([pscustomobject]@{Count=2;Conflicts=0})}
+    }
+    PCAD-Busy $false
+    if($apply.Enabled){throw 'GUI selftest: partial diagnostics allowed apply'}
+    $script:LastReport.Result='DIAGNOSTICO_COMPLETADO_SIN_CAMBIOS'
+    PCAD-Busy $false
+    if(!$apply.Enabled){throw 'GUI selftest: valid preview did not enable apply'}
+    PCAD-Busy $true
+    if($apply.Enabled -or $rollback.Enabled){throw 'GUI selftest: modifications allowed while busy'}
+    Write-Host 'PASS GUI: form initialized, partial diagnostics blocked, valid preview gated and busy state protected.'
     $form.Dispose()
     exit 0
 }
