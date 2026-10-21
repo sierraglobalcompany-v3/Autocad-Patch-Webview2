@@ -84,6 +84,27 @@ function PCAD-Busy([bool]$Busy) {
         (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'ParcheCAD.Reglas.ps1') -PathType Leaf)
     $script:rollback.Enabled=(-not $Busy) -and (Test-Path -LiteralPath (Join-Path $script:Reports 'operaciones') -PathType Container)
 }
+function PCAD-StopOwnedDiagnostic {
+    [CmdletBinding()]
+    param([ValidateRange(100,30000)][int]$TimeoutMs=5000)
+    # The panel owns ONLY its read-only diagnostic child. Never terminate
+    # administrative processes, unrelated PowerShell instances or WebView2.
+    $owned=$script:Proc
+    if($null -eq $owned){return $true}
+    try {
+        $owned.Refresh()
+        if(!$owned.HasExited) {
+            $owned.Kill()
+            if(!$owned.WaitForExit($TimeoutMs)){return $false}
+        }
+        $owned.Dispose()
+        $script:Proc=$null
+        return $true
+    } catch {
+        # Keep the reference and display a failure; never claim CANCELADO.
+        return $false
+    }
+}
 function PCAD-ReadLog([string]$File) {
     try {if(Test-Path -LiteralPath $File -PathType Leaf) {return (Get-Content -LiteralPath $File -ErrorAction Stop) -join [Environment]::NewLine}}
     catch {}
@@ -297,21 +318,30 @@ $cancel.Add_Click({
     if($null -eq $script:Proc){return}
     if(!$InteractionSelfTest -and [Windows.Forms.MessageBox]::Show('Cancelar consulta? No se modifica Windows.','ParcheCAD','YesNo','Question') -ne 'Yes'){return}
     $timer.Stop()
-    try{$script:Proc.Refresh();if(!$script:Proc.HasExited){$script:Proc.Kill()}}catch{}
-    try{$script:Proc.Dispose()}catch{}
-    $script:Proc=$null
+    if(!(PCAD-StopOwnedDiagnostic)){
+        $status.Text='ERROR: no se pudo detener el diagnostico. Espera o revisa el proceso.'
+        $status.ForeColor=[Drawing.Color]::Firebrick
+        PCAD-Busy $true
+        $timer.Start()
+        return
+    }
+    $script:LastReport=$null
+    $script:LastExitCode=$null
     PCAD-Busy $false
     $bar.Style='Continuous';$bar.Value=0
     $status.Text='CANCELADO. No se modifico el firewall.'
+    $status.ForeColor=[Drawing.Color]::DarkRed
 })
 $exit.Add_Click({$form.Close()})
 $form.Add_FormClosing({
     param($sender,$e)
     if($null -ne $script:AdminProc){$script:AdminProc.Refresh();if(!$script:AdminProc.HasExited){$e.Cancel=$true;return}}
     $timer.Stop()
-    if($null -ne $script:Proc){
-        try{$script:Proc.Refresh();if(!$script:Proc.HasExited){$script:Proc.Kill()}}catch{}
-        try{$script:Proc.Dispose()}catch{}
+    if($null -ne $script:Proc -and !(PCAD-StopOwnedDiagnostic)){
+        $e.Cancel=$true
+        $status.Text='NO SE PUDO CERRAR: el diagnostico sigue activo.'
+        $status.ForeColor=[Drawing.Color]::Firebrick
+        $timer.Start()
     }
 })
 $form.Add_Shown({if(!$InteractionSelfTest){PCAD-Begin}})
