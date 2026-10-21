@@ -74,6 +74,11 @@ Preparar **una unica sesion documentada y reproducible** en VM Windows con escri
 
 ## Monitor temporal incorporado al panel (una prueba en el Windows del usuario)
 
+La interfaz muestra **antes de iniciar** una ventana con cinco pasos y exige confirmar para empezar. El panel mantiene un resumen de la secuencia mientras observa. El monitor **no** inserta automáticamente un marcador cuando se aplican las reglas; anotar la hora exacta de aplicación (hh:mm:ss) para separar los eventos.
+
+**Orden recomendado:** cerrar AutoCAD → verificar que la línea base no tiene reglas propias previamente aplicadas (revertir solo las propias desde ParcheCAD si procede) → iniciar monitor → abrir AutoCAD y probar 1–2 minutos SIN aplicar nuevas reglas → cerrar AutoCAD → aplicar desde ParcheCAD con confirmaciones → anotar la hora → reabrir AutoCAD y repetir las mismas acciones 1–2 minutos → detener y guardar. Si había reglas propias activas y no se revirtieron, NO presentar la primera medición como una línea base sin bloqueo.
+
+
 1. Abrir ParcheCAD, dejar terminar el diagnostico inicial y pulsar **INICIAR MONITOR AUTOCAD / WEBVIEW2**. No necesita administrador para las consultas de lectura disponibles.
 2. Abrir AutoCAD y reproducir las funciones relevantes. Para comparar estados, si se autoriza, aplicar/revertir desde los controles normales del programa durante la misma captura; el monitor **no aplica reglas**.
 3. Pulsar **DETENER MONITOR Y GUARDAR LOG**. Se solicita el cierre cooperativo del proceso, no se mata AutoCAD/WebView2 ni se deshabilita el antivirus. Si no se detiene, finaliza por seguridad a los 600 segundos.

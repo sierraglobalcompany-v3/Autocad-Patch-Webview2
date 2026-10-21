@@ -270,6 +270,30 @@ function PCAD-MonitorTick {
     }
     if($null -eq $script:Proc -and $null -eq $script:AdminProc){$timer.Stop()}
 }
+# Keep the sequence available at the moment of starting observation.
+# The monitor records snapshots; it does NOT know when firewall rules were applied.
+function Get-PCADMonitorTestGuide {
+    $nl=[Environment]::NewLine
+    return @(
+        'PRUEBA COMPARATIVA - ANTES Y DESPUES'
+        ''
+        '1. ANTES DE APLICAR: cierra AutoCAD. Si ya hay reglas propias activas,'
+        '   esta captura NO es una linea base sin bloqueo; revierte solo las'
+        '   reglas propias mediante ParcheCAD antes de comenzar, si procede.'
+        '2. Inicia el monitor y abre AutoCAD sin aplicar nuevas reglas.'
+        '   Repite actividades normales durante 1-2 minutos.'
+        '3. Cierra AutoCAD. APLICA el parche desde el panel con confirmacion'
+        '   y administrador. ANOTA LA HORA de aplicacion (hh:mm:ss).'
+        '4. DESPUES DE APLICAR: abre AutoCAD y repite las mismas actividades'
+        '   durante 1-2 minutos.'
+        '5. Pulsa DETENER MONITOR Y GUARDAR LOG. En ABRIR INFORMES revisa'
+        '   monitor.json y resumen.txt. Comparte solo tras revisar privacidad.'
+        ''
+        'IMPORTANTE: el registro NO marca automaticamente la aplicacion,'
+        'no demuestra bloqueo total de red ni aislamiento de WebView2.'
+        'La sesion termina automaticamente a los 10 minutos.'
+    ) -join $nl
+}
 function PCAD-MonitorBegin {
     if($null -ne $script:MonitorProc -or $null -ne $script:Proc -or $null -ne $script:AdminProc){return}
     try {
@@ -286,11 +310,13 @@ function PCAD-MonitorBegin {
         $script:MonitorProc=Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList $args -WindowStyle Hidden -RedirectStandardOutput $logOut -RedirectStandardError $script:MonitorErr -PassThru -ErrorAction Stop
         $script:MonitorStopRequested=$false
         PCAD-Busy $false
-        $status.Text='MONITOR ACTIVO: abre AutoCAD, realiza pruebas y despues pulsa detener.'
+        $status.Text='MONITOR ACTIVO: primero SIN parche, luego aplica, repite y detiene.'
         $status.ForeColor=[Drawing.Color]::DarkBlue
-        $details.Text='Registro solo lectura sin IP, URLs ni argumentos. Auto-finaliza en 10 minutos.'+[Environment]::NewLine+
-            'Puedes usar aplicar/revertir con sus confirmaciones habituales durante el monitoreo.'+[Environment]::NewLine+
-            'No demuestra intentos fallidos o bloqueos del firewall. Informe: '+$script:MonitorRoot
+        $details.Text='ANTES: abre AutoCAD SIN nuevas reglas y prueba 1-2 minutos.'+[Environment]::NewLine+
+            'APLICA: cierra AutoCAD, aplica ParcheCAD y ANOTA LA HORA exacta.'+[Environment]::NewLine+
+            'DESPUES: reabre AutoCAD, repite acciones 1-2 minutos y pulsa DETENER.'+[Environment]::NewLine+
+            'El monitor NO registra cuando se aplico el parche ni verifica todo el trafico.'+[Environment]::NewLine+
+            'Sesion de maximo 10 minutos; log local: '+$script:MonitorRoot
         $timer.Start()
     } catch {
         PCAD-Busy $false
@@ -421,7 +447,13 @@ $rollback.Add_Click({
     }
 })
 $start.Add_Click({PCAD-Begin})
-$monitorStart.Add_Click({PCAD-MonitorBegin})
+$monitorStart.Add_Click({
+    if($null -ne $script:MonitorProc -or $null -ne $script:Proc -or $null -ne $script:AdminProc){return}
+    $answer=[Windows.Forms.MessageBox]::Show(
+        ((Get-PCADMonitorTestGuide)+[Environment]::NewLine+[Environment]::NewLine+'Iniciar monitor ahora?'),
+        'Guia de prueba AutoCAD y WebView2','YesNo','Information')
+    if($answer -eq [Windows.Forms.DialogResult]::Yes){PCAD-MonitorBegin}
+})
 $monitorStop.Add_Click({PCAD-MonitorStop})
 $open.Add_Click({
     if(Test-Path -LiteralPath $script:Reports -PathType Container){
@@ -589,6 +621,11 @@ if($InteractionSelfTest){
     }
 }
 if($SelfTest){
+    $guide=Get-PCADMonitorTestGuide
+    foreach($required in @('ANTES DE APLICAR','APLICA','DESPUES DE APLICAR',
+                           'ANOTA LA HORA','NO marca automaticamente','10 minutos')){
+        if(!$guide.Contains($required)){throw ('GUI selftest: incomplete monitor instructions: '+$required)}
+    }
     if(!$form.Controls.Contains($preview) -or !$form.Controls.Contains($apply) -or
        !$form.Controls.Contains($rollback) -or !$form.Controls.Contains($monitorStart) -or
         !$form.Controls.Contains($monitorStop) -or $monitorStop.Enabled -or $apply.Enabled -or $rollback.Enabled){throw 'GUI selftest: controls missing or dangerous startup state'}
