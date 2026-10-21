@@ -136,8 +136,9 @@ function Get-PCADActualRuleStatus {
     $address=@($one | Get-NetFirewallAddressFilter -ErrorAction Stop)
     $service=@($one | Get-NetFirewallServiceFilter -ErrorAction Stop)
     $interfaceType=@($one | Get-NetFirewallInterfaceTypeFilter -ErrorAction Stop)
+    $interface=@($one | Get-NetFirewallInterfaceFilter -ErrorAction Stop)
     if($port.Count -ne 1 -or $address.Count -ne 1 -or
-       $service.Count -ne 1 -or $interfaceType.Count -ne 1){
+       $service.Count -ne 1 -or $interfaceType.Count -ne 1 -or $interface.Count -ne 1){
         return [pscustomobject]@{State='CONFLICT';Description='Filtros de puertos, direcciones, servicio o interfaz ausentes/ambiguos'}
     }
     $fullScope=(
@@ -147,14 +148,15 @@ function Get-PCADActualRuleStatus {
         (Test-PCADFirewallFilterAny $address[0].LocalAddress) -and
         (Test-PCADFirewallFilterAny $address[0].RemoteAddress) -and
         (Test-PCADFirewallFilterAny $service[0].Service) -and
-        (Test-PCADFirewallFilterAny $interfaceType[0].InterfaceType)
+        (Test-PCADFirewallFilterAny $interfaceType[0].InterfaceType) -and
+        (Test-PCADFirewallFilterAny $interface[0].InterfaceAlias)
     )
     if(!$fullScope){
-        return [pscustomobject]@{State='CONFLICT';Description='Regla restringida por protocolo, puertos, IP, servicio o interfaz; no modificar'}
+        return [pscustomobject]@{State='CONFLICT';Description='Regla restringida por protocolo, puertos, IP, servicio, tipo o alias de interfaz; no modificar'}
     }
     return [pscustomobject]@{
         State='EXISTS_VALID'
-        Description='Regla propia con salida Block, perfiles Any y filtros amplios de protocolo, puertos, direcciones, servicio e interfaz'
+        Description='Regla propia con salida Block, perfiles Any y filtros amplios de protocolo, puertos, direcciones, servicio, tipo y alias de interfaz'
     }
 }
 function New-PCADRulePlan {
