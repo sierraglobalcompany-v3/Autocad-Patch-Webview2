@@ -1,5 +1,5 @@
 # SPEC MAESTRA — ParcheCAD 4.0
-**Estado:** F0–F4 implementadas, F5 QA integrada en curso, no RC ni release · **Repositorio:** sierraglobalcompany-v3/Autocad-Patch-Webview2 · **Fecha:** 2026-10-20
+**Estado:** F0–F6 en desarrollo con QA Windows y ZIP DEV reproducible, no RC ni release · **Repositorio:** sierraglobalcompany-v3/Autocad-Patch-Webview2 · **Fecha:** 2026-10-20
 
 ## Objetivo y definiciones de éxito
 Inventariar AutoCAD 2023–2027, sus ejecutables y servicios, procesos WebView2, reglas de firewall y conexiones. Evaluar aislamiento de conexiones de Autodesk, aceptando pérdida de funciones en línea, sin afectar WebView2 de WhatsApp/Outlook.
@@ -63,4 +63,12 @@ Nunca deshabilitar AVG/Defender, añadir exclusiones, evadir alertas, eliminar l
 - QA alcanzada: PowerShell 5.1/7, fixtures F0–F5, autoinicialización WinForms y reglas reales temporales en Windows efímero. No reemplaza prueba de AutoCAD instalado, QA visual interactiva ni validación WebView2.
 - Documento de referencia y puertas: `docs/F5_INTEGRACION_RECUPERACION_QA.md`.
 
-**NEXT: cierre F5/RC1 — QA gráfica interactiva, recuperaciones en interrupciones reales, detección en AutoCAD instalado y declaración honesta de cobertura. PRs Draft; no merge ni release.**
+## F6 — recuperación real y empaquetado técnico (2026-10-21)
+
+- Detectar instalaciones desde DisplayIcon si InstallLocation está ausente/incorrecta, solo con rutas locales explícitas hacia acad.exe que existan físicamente; jamás ejecutar datos del registro.
+- Probar con Windows real **descartable** la reversión de una regla temporal válida cuyo journal quedó en CREATING tras una interrupción simulada en mitad de la operación.
+- ZIP DEV contiene exclusivamente allowlist de fuentes/documentos, con timestamp normalizado y SHA256 por archivo y por ZIP. Verificar determinismo con dos compilaciones y ejecutar CLI Preview y GUI SelfTest desde paquete extraído.
+- Guardar ZIP como GitHub Actions artifact temporal, sin usar GitHub Releases ni publicarlo como RC o certificado.
+- No confundir interrupción simulada con apagado abrupto/reinicio ensayado. Tampoco equivale a test de AutoCAD real o de aislamiento WebView2.
+
+**NEXT: integración final RC1 — QA gráfica interactiva, UAC/reinicio real, AutoCAD instalado y evidencia honesta de cobertura/WebView2. PRs Draft; no merge ni release.**
