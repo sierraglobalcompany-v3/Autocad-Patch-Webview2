@@ -1,7 +1,7 @@
 # ParcheCAD 4.0 - diagnóstico no bloqueante; modificaciones solo con UAC y confirmación.
 #Requires -Version 5.1
 [CmdletBinding()]
-param([switch]$SelfTest)
+param([switch]$SelfTest,[switch]$InteractionSelfTest)
 Set-StrictMode -Version 2.0
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName System.Windows.Forms
@@ -18,6 +18,10 @@ $script:Started=Get-Date
 $script:LastReport=$null
 $script:LastExitCode=$null
 $script:AdminProc=$null
+# CI fixture only: never execute an administrative command or change the firewall.
+if($InteractionSelfTest -and ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hosted')) {
+    throw 'InteractionSelfTest requires an ephemeral GitHub-hosted Windows runner.'
+}
 function PCAD-Label([string]$Text,[int]$X,[int]$Y,[int]$W,[int]$H,[int]$Size=10) {
     $o=New-Object Windows.Forms.Label
     $o.Text=$Text;$o.Location=New-Object Drawing.Point($X,$Y)
@@ -273,7 +277,7 @@ $open.Add_Click({
 })
 $cancel.Add_Click({
     if($null -eq $script:Proc){return}
-    if([Windows.Forms.MessageBox]::Show('Cancelar consulta? No se modifica Windows.','ParcheCAD','YesNo','Question') -ne 'Yes'){return}
+    if(!$InteractionSelfTest -and [Windows.Forms.MessageBox]::Show('Cancelar consulta? No se modifica Windows.','ParcheCAD','YesNo','Question') -ne 'Yes'){return}
     $timer.Stop()
     try{$script:Proc.Refresh();if(!$script:Proc.HasExited){$script:Proc.Kill()}}catch{}
     try{$script:Proc.Dispose()}catch{}
@@ -292,7 +296,79 @@ $form.Add_FormClosing({
         try{$script:Proc.Dispose()}catch{}
     }
 })
-$form.Add_Shown({PCAD-Begin})
+$form.Add_Shown({if(!$InteractionSelfTest){PCAD-Begin}})
+if($InteractionSelfTest){
+    # This exercises WinForms event handlers in STA with real child process
+    # for READ-ONLY diagnostics and dummy processes for cancel/close. No UAC.
+    $createdRunRoot=''
+    try {
+        $form.Show()
+        [Windows.Forms.Application]::DoEvents()
+        if(!$form.Visible -or !$start.Enabled -or $apply.Enabled){throw 'F9: form not visible or unsafe initial buttons'}
+        $start.PerformClick()
+        [Windows.Forms.Application]::DoEvents()
+        if($null -eq $script:Proc -or !$cancel.Enabled -or $apply.Enabled){throw 'F9: Start click did not start read-only child'}
+        $createdRunRoot=$script:RunRoot
+        $waitStart=Get-Date
+        while($null -ne $script:Proc -and ((Get-Date)-$waitStart).TotalSeconds -lt 100){
+            [Windows.Forms.Application]::DoEvents()
+            Start-Sleep -Milliseconds 100
+        }
+        if($null -ne $script:Proc){throw 'F9: diagnostic did not finish within 100 sec'}
+        if($null -eq $script:LastReport -or $null -eq $script:LastExitCode){throw 'F9: diagnostic produced no report or exit code'}
+        $ui=Get-PCADReportUiState -Report $script:LastReport -ExitCode $script:LastExitCode
+        if(!$start.Enabled -or $cancel.Enabled -or $apply.Enabled){throw 'F9: empty Windows unexpectedly allows Apply or Cancel after finish'}
+        if($status.Text -ne $ui.Description){throw 'F9: header disagrees with validated diagnostic state'}
+        Write-Host ('F9 PASS: actual button Start -> read-only child -> report -> safe GUI status ({0}).' -f $ui.Result)
+
+        # Cancel an owned dummy sleep child using the real Cancel button.
+        $script:LastReport=$null;$script:LastExitCode=$null
+        $script:Proc=Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList '-NoLogo -NoProfile -Command "Start-Sleep -Seconds 30"' -PassThru -WindowStyle Hidden -ErrorAction Stop
+        PCAD-Busy $true
+        [Windows.Forms.Application]::DoEvents()
+        if(!$cancel.Enabled -or $apply.Enabled){throw 'F9: Cancel disabled or Apply enabled during active child'}
+        $cancel.PerformClick()
+        [Windows.Forms.Application]::DoEvents()
+        if($null -ne $script:Proc -or $cancel.Enabled -or $apply.Enabled -or $status.Text -notmatch 'CANCELADO'){
+            throw 'F9: Cancel did not terminate owned read-only process and reset buttons'
+        }
+        Write-Host 'F9 PASS: Cancel click terminates only the owned diagnostic fixture.'
+
+        # Simulate an administrative process without elevation or firewall.
+        # Close must be denied while a process flagged as admin is running.
+        $script:AdminProc=Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList '-NoLogo -NoProfile -Command "Start-Sleep -Seconds 30"' -PassThru -WindowStyle Hidden -ErrorAction Stop
+        PCAD-Busy $true
+        [Windows.Forms.Application]::DoEvents()
+        if($cancel.Enabled -or $apply.Enabled -or $rollback.Enabled){throw 'F9: modifications/cancel enabled with admin process'}
+        $form.Close()
+        [Windows.Forms.Application]::DoEvents()
+        if($form.IsDisposed){throw 'F9: form closed while administrative placeholder was running'}
+        $script:AdminProc.Refresh()
+        if(!$script:AdminProc.HasExited){$script:AdminProc.Kill()}
+        $script:AdminProc.WaitForExit(5000) | Out-Null
+        $script:AdminProc.Dispose();$script:AdminProc=$null
+        PCAD-Busy $false
+        Write-Host 'F9 PASS: window refuses close during simulated admin operation.'
+        $form.Close()
+        if(!$form.IsDisposed){$form.Dispose()}
+        Write-Host 'PASS F9: interactive WinForms buttons and lifecycle, no firewall or UAC changes.' -ForegroundColor Green
+        exit 0
+    } finally {
+        $timer.Stop()
+        foreach($name in @('Proc','AdminProc')){
+            $p=Get-Variable -Name $name -Scope Script -ValueOnly -ErrorAction SilentlyContinue
+            if($null -ne $p){
+                try {$p.Refresh();if(!$p.HasExited){$p.Kill();$p.WaitForExit(5000)|Out-Null}} catch{}
+                try {$p.Dispose()} catch{}
+                Set-Variable -Name $name -Scope Script -Value $null
+            }
+        }
+        if(!$form.IsDisposed){$form.Dispose()}
+        if($createdRunRoot -and (Test-Path -LiteralPath $createdRunRoot -PathType Container)){
+            Remove-Item -LiteralPath $createdRunRoot -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
 if($SelfTest){
     if(!$form.Controls.Contains($preview) -or !$form.Controls.Contains($apply) -or
        !$form.Controls.Contains($rollback) -or $apply.Enabled -or $rollback.Enabled){throw 'GUI selftest: controls missing or dangerous startup state'}
