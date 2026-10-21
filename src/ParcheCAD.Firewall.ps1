@@ -37,9 +37,10 @@ function Write-PCADJournal {
     $tmp=$File+'.pending'
     [IO.File]::WriteAllText($tmp,($Journal|ConvertTo-Json -Depth 8),$utf8)
     if(Test-Path -LiteralPath $File -PathType Leaf) {
-        [IO.File]::Delete($File)
+        [IO.File]::Replace($tmp,$File,($File+'.prev'))
+    } else {
+        [IO.File]::Move($tmp,$File)
     }
-    [IO.File]::Move($tmp,$File)
 }
 function Invoke-PCADRollbackRules {
     [CmdletBinding()]
@@ -52,7 +53,7 @@ function Invoke-PCADRollbackRules {
     $results=New-Object System.Collections.ArrayList
     $count=0
     foreach($entry in @($journal.Operations)){
-        if([string]$entry.State -notin @('CREATED','ROLLBACK_ERROR')){continue}
+        if([string]$entry.State -notin @('CREATING','CREATED','ROLLBACK_ERROR')){continue}
         try{
             $null=Assert-PCADManagedEntry -Entry $entry
             $before=Get-PCADActualRuleStatus -RuleName ([string]$entry.RuleName) -Program ([string]$entry.Program)
@@ -117,6 +118,8 @@ function Invoke-PCADApplyPlan {
             if($e.State -ne 'PENDING'){continue}
             $state=Get-PCADActualRuleStatus -RuleName $e.RuleName -Program $e.Program
             if($state.State -ne 'MISSING'){throw ('Regla cambio antes de aplicar: '+$e.RuleName)}
+            $e.State='CREATING'
+            Write-PCADJournal -Journal $journal -File $journalPath
             New-NetFirewallRule -Name $e.RuleName -DisplayName $e.DisplayName -Group 'PCAD4_MANAGED' -Direction Outbound -Action Block -Program $e.Program -Enabled True -Profile Any -PolicyStore PersistentStore -ErrorAction Stop | Out-Null
             # Registrar incluso si la validacion posterior falla, para poder revertir.
             $e.State='CREATED'
