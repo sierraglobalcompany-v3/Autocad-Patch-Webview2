@@ -12,6 +12,7 @@ if($WriteExitMarker -and ($NoExport -or [string]::IsNullOrWhiteSpace($OutputDire
 . (Join-Path $PSScriptRoot 'ParcheCAD.Network.ps1')
 . (Join-Path $PSScriptRoot 'ParcheCAD.Policy.ps1')
 . (Join-Path $PSScriptRoot 'ParcheCAD.Evidence.ps1')
+. (Join-Path $PSScriptRoot 'ParcheCAD.Cobertura.ps1')
 
 $started=Get-Date
 $sections=[ordered]@{}
@@ -72,6 +73,14 @@ foreach ($stage in $stages) {
             PolicyPreview {
                 $internalPlan=New-PCADRulePlan -Catalog $privateCatalog -CheckExisting
                 $result=@(ConvertTo-PCADSafePlan -Plan $internalPlan)
+                # Seccion F11 adicional de solo lectura; SIN modificar las diez etapas,
+                # los permisos o las condiciones del control Apply.
+                $networkRows=@($sections['NetworkOverview'])
+                $networkInfo=if($networkRows.Count -gt 0){$networkRows[0]}else{$null}
+                $sections['Coverage']=@(Get-PCADCoverageReport `
+                    -Catalog $privateCatalog -Services @($sections['Services']) `
+                    -Processes @($sections['Processes']) -Connections @($sections['Connections']) `
+                    -Plan $internalPlan -NetworkOverview $networkInfo)
                 break
             }
         }
@@ -126,6 +135,18 @@ if (!$NoExport) {
             $lines.Add(('{0}: {1} / {2} elementos / {3}s. {4}' -f $c.Section,$c.Status,$c.Count,$c.Seconds,$c.Detail))
         }
         $lines.Add('')
+        $coverageRows=@($sections['Coverage'])
+        if($coverageRows.Count -gt 0){
+            $cov=$coverageRows[0]
+            $lines.Add('F11 MATRIZ DE COBERTURA: NO CERTIFICADA / SOLO OBSERVACIONAL')
+            $lines.Add(('EXE candidatos: {0}; regla presente: {1}; ausente: {2}; desconocida: {3}' -f $cov.CandidateProgramRules,$cov.ProgramRulesPresent,$cov.ProgramRulesMissing,$cov.ProgramRulesUnknown))
+            $lines.Add(('Servicios Autodesk inventariados: {0}; TCP observados: {1}; endpoints UDP: {2}' -f $cov.AutodeskServicesInventoried,$cov.TcpEntriesObserved,$cov.UdpEndpointsObserved))
+            foreach($row in @($cov.Rows)){
+                $lines.Add(('{0}: {1} / {2} / {3}' -f $row.Category,$row.Count,$row.Policy,($row.Names -join ', ')))
+            }
+            $lines.Add('Ausencia de trafico y aislamiento de WebView2: NO VERIFICADOS')
+            $lines.Add('')
+        }
         $lines.Add('No se modifico firewall, registro, tareas ni servicios.')
         $lines.Add('No publicar informes sin revisar datos personales.')
         [IO.File]::WriteAllLines((Join-Path $folder 'resumen.txt'),$lines,$utf8)
