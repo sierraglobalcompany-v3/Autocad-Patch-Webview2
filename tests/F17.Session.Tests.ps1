@@ -15,7 +15,7 @@ $exe=Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
 $expected=@('Installations','Processes','Services','Catalog','Firewall','Tasks','Historico','Connections','NetworkOverview','PolicyPreview')
 function New-F17Report {
     [pscustomobject]@{
-        SchemaVersion=1;Tool='ParcheCAD';ReadOnly=$true;Result='DIAGNOSTICO_COMPLETADO_SIN_CAMBIOS'
+        SchemaVersion=1;Tool='ParcheCAD';GeneratedAt='2026-10-21T10:00:00-05:00';ReadOnly=$true;Result='DIAGNOSTICO_COMPLETADO_SIN_CAMBIOS'
         Checks=@($expected|ForEach-Object {[pscustomobject]@{Section=$_;Status='OK'}})
         Sections=[pscustomobject]@{
             Installations=@()
@@ -33,9 +33,27 @@ function New-F17Report {
 try{
     $null=New-Item -ItemType Directory -Path (Join-Path $tmp 'before\one') -Force
     $null=New-Item -ItemType Directory -Path (Join-Path $tmp 'after\two') -Force
-    $json=New-F17Report | ConvertTo-Json -Depth 9
-    [IO.File]::WriteAllText((Join-Path $tmp 'before\one\diagnostico.json'),$json)
-    [IO.File]::WriteAllText((Join-Path $tmp 'after\two\diagnostico.json'),$json)
+    $b=New-F17Report
+    $a=New-F17Report
+    $beforeFile=Join-Path $tmp 'before\one\diagnostico.json'
+    $afterFile=Join-Path $tmp 'after\two\diagnostico.json'
+    $json=$b | ConvertTo-Json -Depth 9
+    [IO.File]::WriteAllText($beforeFile,$json)
+    [IO.File]::WriteAllText($afterFile,$json)
+    $oldPreference=$ErrorActionPreference
+    try{
+        $ErrorActionPreference='Continue'
+        & $exe -NoLogo -NoProfile -ExecutionPolicy RemoteSigned -File $tool -Mode Evaluate -SessionDirectory $tmp *> $null
+        $duplicateExit=$LASTEXITCODE
+        $a.GeneratedAt='2026-10-21T09:00:00-05:00'
+        [IO.File]::WriteAllText($afterFile,($a | ConvertTo-Json -Depth 9))
+        & $exe -NoLogo -NoProfile -ExecutionPolicy RemoteSigned -File $tool -Mode Evaluate -SessionDirectory $tmp *> $null
+        $reverseExit=$LASTEXITCODE
+    }finally{$ErrorActionPreference=$oldPreference}
+    Assert-F17 ($duplicateExit -ne 0 -and $reverseExit -ne 0) 'duplicate and reversed captures rejected'
+    Assert-F17 (!(Test-Path -LiteralPath (Join-Path $tmp 'evaluacion'))) 'negative checks do not create assessment'
+    $a.GeneratedAt='2026-10-21T10:05:00-05:00'
+    [IO.File]::WriteAllText($afterFile,($a | ConvertTo-Json -Depth 9))
     & $exe -NoLogo -NoProfile -ExecutionPolicy RemoteSigned -File $tool -Mode Evaluate -SessionDirectory $tmp
     Assert-F17 ($LASTEXITCODE -eq 0) 'evaluation subprocess'
     $f=Join-Path $tmp 'evaluacion\F17_MATRIZ_EVIDENCIA.json'
@@ -43,6 +61,7 @@ try{
     $m=Get-Content -LiteralPath $f -Raw | ConvertFrom-Json
     Assert-F17 ($m.Decision -ceq 'BLOCKED' -and $m.ProductionCertified -eq $false) 'no RC1 certification'
     Assert-F17 (@($m.Gates).Count -eq 10) 'all ten gates'
+    Assert-F17 ($m.ContentsDistinctVerified -and $m.TimestampOrderVerified -and !$m.SameMachineVerified) 'time and content verified, host not certified'
     Assert-F17 (@($m.Gates | Where-Object {$_.ExternalEvidence -cne 'PENDING_REVIEW'}).Count -eq 0) 'external evidence never autopasses'
     Assert-F17 ((Get-Content -LiteralPath $f -Raw) -notmatch '(?i)C:\\Users\\|192\.0\.2\.') 'matrix sanitized'
     # Expected failures: PowerShell 5.1 maps native stderr to NativeCommandError

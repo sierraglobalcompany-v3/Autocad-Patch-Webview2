@@ -30,10 +30,10 @@ Preparar **una unica sesion documentada y reproducible** en VM Windows con escri
 7. **Reinicio/recuperacion.** Ensayar en VM estado aplicado, reinicio real, operacion inconclusa solo si el snapshot permite recuperacion segura, deteccion de journal y rollback propio. Ante fallo de recuperacion: STOP y restaurar snapshot; nunca borrar regla ajena. AVG/Defender permanece activo durante toda la sesion.
 8. **After F17 (solo lectura).** Tras la operacion y la reversion acordada ejecutar:
    powershell.exe -NoProfile -File .\tools\Invoke-ParcheCADF17.ps1 -Mode After -SessionDirectory C:\PCAD_LAB_SESSION
-   Debe existir un diagnostico.json distinto del Before; no reutilizar el mismo archivo.
+   Debe existir un diagnostico.json distinto del Before y posterior en GeneratedAt. Dos rutas con el mismo contenido/hash SHA256 o un reloj invertido provocan STOP; la misma maquina **no** se puede certificar por JSON y debe cotejarse manualmente con evidencia local.
 9. **Evaluacion F12 + matriz F17.**
    powershell.exe -NoProfile -File .\tools\Invoke-ParcheCADF17.ps1 -Mode Evaluate -SessionDirectory C:\PCAD_LAB_SESSION
-   El facilitador reutiliza F12 y genera evaluacion/RC12_EVALUACION.json, RC12_RESUMEN.txt y F17_MATRIZ_EVIDENCIA.json con diez puertas y ExternalEvidence=PENDING_REVIEW. No sobreescribe una evaluacion; crear nueva sesion si es necesario.
+   El facilitador reutiliza F12 y genera evaluacion/RC12_EVALUACION.json, RC12_RESUMEN.txt y F17_MATRIZ_EVIDENCIA.json con diez puertas y ExternalEvidence=PENDING_REVIEW. No sobreescribe una evaluacion; crear nueva sesion si es necesario. La evaluacion valida capturas F12, SHA256 diferentes y orden temporal, sin asumir que son de la misma maquina.
 10. **Revision independiente.** El operador relaciona cada puerta con evidencia local, hashes y resultados observables, anonimiza un **resumen** para revision de codigo, consigna PASS/BLOCKED solo con evidencia manual revisada. Hasta integrar explicitamente ese proceso de revision a una puerta futura, **F12/F17 NO pueden certificar RC1**.
 
 ## Puertas F12 y evidencias minimas
@@ -53,7 +53,7 @@ Preparar **una unica sesion documentada y reproducible** en VM Windows con escri
 
 ## Separacion de evidencia y privacidad
 
-**No subir a GitHub:** trazas ETL/PCAP, direcciones IP, hostnames, identificadores de licencias, numeros de serie, PID vinculados a usuarios, contrasenas, credenciales, rutas personales, journals con Program real, capturas de terceros. Conservar originales cifrados o en carpeta privada local con control de acceso; publicar unicamente matriz redactada de hallazgos sin datos sensibles. F17_MATRIZ_EVIDENCIA.json es un checklist, no una afirmacion de haber ensayado trafico.
+**No subir a GitHub:** trazas ETL/PCAP, direcciones IP, hostnames, identificadores de licencias, numeros de serie, PID vinculados a usuarios, contrasenas, credenciales, rutas personales, journals con Program real, capturas de terceros. Conservar originales cifrados o en carpeta privada local con control de acceso; publicar unicamente matriz redactada de hallazgos sin datos sensibles. F17_MATRIZ_EVIDENCIA.json es un checklist, no una afirmacion de haber ensayado trafico. Flags ContentsDistinctVerified/ TimestampOrderVerified documentan solo el formato y orden; SameMachineVerified=false sin certificacion manual.
 
 ## Resultados que permiten cerrar F17
 
