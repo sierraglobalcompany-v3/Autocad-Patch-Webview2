@@ -14,6 +14,30 @@ function Get-PCADCanonicalProgram {
     return $full.TrimEnd([char]'\')
 }
 
+function Assert-PCADProgramInstallRoot {
+    [CmdletBinding()]
+    param([string]$Program,[int]$Year,[string]$InstallRoot,[switch]$AllowMissing)
+    $path=Get-PCADCanonicalProgram -Path $Program
+    if($Year -lt 2023 -or $Year -gt 2027){throw 'Version de AutoCAD fuera del soporte 2023-2027.'}
+    if([string]::IsNullOrWhiteSpace($InstallRoot)){
+        if($path -notmatch ('(?i)\\AutoCAD '+$Year+'\\')) {
+            throw 'Falta raiz de instalacion para una ruta personalizada.'
+        }
+        return $path
+    }
+    if(![IO.Path]::IsPathRooted($InstallRoot) -or $InstallRoot -match '^\\\\' -or
+       $InstallRoot -match '\[(USUARIO|RUTA_RED_OCULTA)\]') {
+        throw 'La raiz de instalacion no es local o no se puede verificar.'
+    }
+    $root=[IO.Path]::GetFullPath($InstallRoot).TrimEnd([char]'\')
+    if(!$path.StartsWith(($root+'\'),[StringComparison]::OrdinalIgnoreCase)) {
+        throw 'El EXE no pertenece a la raiz de AutoCAD seleccionada.'
+    }
+    if(!$AllowMissing -and !(Test-Path -LiteralPath (Join-Path $root 'acad.exe') -PathType Leaf)) {
+        throw 'No se comprobo acad.exe dentro de la raiz de instalacion.'
+    }
+    return $path
+}
 function Get-PCADRuleName {
     [CmdletBinding()]
     param([string]$Program)
@@ -78,16 +102,15 @@ function New-PCADRulePlan {
         try {
             $path=Get-PCADCanonicalProgram -Path $original
             $year=[int]$c.Year
-            if($year -lt 2023 -or $year -gt 2027 -or $path -notmatch ('(?i)\\AutoCAD '+$year+'\\')) {
-                throw 'Ruta/version no coinciden'
-            }
+            $installRoot=Get-PCADProperty -Object $c -Name 'InstallationRoot'
+            $null=Assert-PCADProgramInstallRoot -Program $path -Year $year -InstallRoot $installRoot
             $key=$path.ToUpperInvariant()
             if($seen.ContainsKey($key)){continue}
             $seen[$key]=$true
             $ruleName=Get-PCADRuleName -Program $path
             $item=[pscustomobject]@{
                 RuleName=$ruleName;Group='PCAD4_MANAGED';Year=$year
-                Program=$path;DisplayName=('ParcheCAD 4.0 - AutoCAD '+$year+' - '+[IO.Path]::GetFileName($path))
+                Program=$path;InstallationRoot=$installRoot;DisplayName=('ParcheCAD 4.0 - AutoCAD '+$year+' - '+[IO.Path]::GetFileName($path))
                 Direction='Outbound';Action='Block';Profile='Any'
                 Existing='NO_COMPROBADO';Assessment='CANDIDATO'
             }
