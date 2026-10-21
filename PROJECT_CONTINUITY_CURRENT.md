@@ -60,5 +60,15 @@ Rama de solo documentación PR #2 Draft: 10 pasadas y plan F0–F6, sin merge. S
 - Bloqueo exclusivo de WebView2 de AutoCAD **NO RESUELTO**. La política F4 excluye `msedgewebview2.exe` compartido para proteger WhatsApp/Correo.
 - UI gráfica **no certificada visualmente**; QA Windows real de regla/reversión **PENDIENTE**.
 
+## F4 — QA real e interfaz (PR #6 Draft)
+- **CI #32 PASS (3 trabajos):** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39532218826
+- Windows Server 2022 GitHub-hosted efímero: regla real temporal creada, confirmada, repetida sin duplicados, retirada aun después de borrar EXE ficticio. No tocó Autodesk ni WebView2.
+- PowerShell 5.1 + 7: parser, fixtures y suite F0–F4 PASS. GUI WinForms inicializa con controles deshabilitados hasta análisis: self-test PASS, pero QA visual de clics NO CERTIFICADO.
+- GUI en `src/ParcheCAD.Panel.ps1`: vista previa, Apply con UAC + doble confirmación, Rollback por manifiesto propio. No activa reglas al iniciar.
+- Correcciones: DisplayName aceptado por Windows; rollback huérfano; errores de consulta no se confunden con reglas ausentes; reconstrucción de manejadores GUI sin sintaxis corrupta.
+- Evidencia: `docs/F4_INTERFAZ_QA_REAL.md`.
+- **LIMITES:** WebView2 compartido NO aislado; servicios Autodesk compartidos no cubiertos automáticamente. AutoCAD real 2023–2027 y rutas personalizadas pendientes de prueba final. No llamar RC1 todavía.
+- Cuatro PR apilados Draft: #3 F0, #4 F1/F2, #5 F3/F4, #6 integración y QA. Ninguno merge a main.
+
 ## NEXT — único y accionable
-**F4 GUI + QA DE MUTACIÓN AISLADA:** probar aplicación y reversión en una VM Windows desechable (no la PC del usuario ni el runner compartido), validar rutas, GPO, rollback tras interrupción, firewall inbound/outbound y efectos en otras aplicaciones. Solo después habilitar botones Aplicar/Revertir en WinForms con preview, confirmación y verificación final. Mantener PR #3/#4/#5 Draft, no merge. Preparar RC1 integral antes de solicitar prueba del usuario.
+**F5 / RC1 INTEGRADA:** completar QA de GUI en escritorio Windows aislado, casos UAC denegado, bloqueo/reversión y cortes a mitad, instalaciones custom con privacidad, inventario completo y actualizaciones; resolver cobertura de componentes compartidos con revisión de impacto y documentar límites WebView2. Unir docs y QA antes del próximo runtime. Probar con usuario solo una RC1 que esté suficientemente completa, sin solicitar tests por fase ni prometer bloqueo total si no se demuestra.
