@@ -76,7 +76,7 @@ Rama de solo documentación PR #2 Draft: 10 pasadas y plan F0–F6, sin merge. S
 - El plan incluye raíz de instalación comprobada, tanto para aplicar reglas como para revertirlas después de quitar el EXE. Fallback compatible con la ruta estándar heredada.
 - `Get-PCADRecoveryOverview` consulta de solo lectura las operaciones guardadas, distingue registros aplicados, interrumpidos y corruptos; **no garantiza que reglas sigan efectivas**.
 - GUI WinForms enseña recuperación y no habilita Aplicar ante diagnóstico PARCIAL, conflicto o tarea activa; se agregaron aserciones de estado al self-test.
-- **CI #40 PASS (3/3):** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39534804275 (Windows PowerShell 5.1/7; fixtures F0–F5; GUI inicializada con autoevaluación; regla de prueba real creada/revertida en Windows efímero).
+- **CI final F5 #46 PASS (3/3):** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39535189157 (Windows PowerShell 5.1/7; fixtures F0–F5; GUI autoevaluada; diagnóstico+preview read-only; regla de prueba real creada/revertida en Windows efímero).
 - Evidencia y límites: `docs/F5_INTEGRACION_RECUPERACION_QA.md`.
 - **BLOCKED para RC1:** QA interactiva real WinForms+UAC y reinicio, detección con AutoCAD instalado, interrupción deliberada durante modificación, validación de tráfico y cobertura Autodesk compartido, aislamiento WebView2 exclusivo NO RESUELTO.
 - Metodología: KISS / ley anti-ruido, reparar fuente, sin parches paralelos. El usuario NO debe probar módulos parciales.
