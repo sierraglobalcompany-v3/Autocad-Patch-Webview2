@@ -1,0 +1,5 @@
+# Reportes locales (pueden contener informacion del equipo).
+informes/
+*.tmp
+*.bak
+*.log
