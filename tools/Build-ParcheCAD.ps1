@@ -14,6 +14,7 @@ $items=@(
     'src/ParcheCAD.Historico.ps1',
     'src/ParcheCAD.Network.ps1',
     'src/ParcheCAD.Cobertura.ps1',
+    'src/ParcheCAD.RCGates.ps1',
     'src/ParcheCAD.Policy.ps1',
     'src/ParcheCAD.Firewall.ps1',
     'src/ParcheCAD.Evidence.ps1',
@@ -32,7 +33,9 @@ $items=@(
     'docs/F8_UISTATE_QA.md',
     'docs/F9_WINFORMS_EVENT_QA.md',
     'docs/F10_PROCESOS_RECUPERACION_QA.md',
-    'docs/F11_MATRIZ_COBERTURA_WEBVIEW2.md'
+    'docs/F11_MATRIZ_COBERTURA_WEBVIEW2.md',
+    'docs/F12_GATE_RC1_QA_INTEGRADA.md',
+    'tools/Invoke-ParcheCADRC12.ps1'
 ) | Sort-Object
 foreach($name in $items){
     if($name -notmatch '^[a-zA-Z0-9_/.-]+$' -or $name -match '(?:^|/)\.\.(?:/|$)') {
