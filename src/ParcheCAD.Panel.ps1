@@ -1,4 +1,4 @@
-# ParcheCAD 4.0 F2 - panel diagnostico no bloqueante. SOLO LECTURA.
+# ParcheCAD 4.0 - diagnóstico no bloqueante; modificaciones solo con UAC y confirmación.
 #Requires -Version 5.1
 [CmdletBinding()]
 param([switch]$SelfTest)
@@ -76,7 +76,18 @@ function PCAD-Busy([bool]$Busy) {
     if($null -ne $script:LastReport){$plans=@($script:LastReport.Sections.PolicyPreview | Where-Object {$null -ne $_})}
     $ready=($plans.Count -gt 0 -and [int]$plans[0].Count -gt 0 -and [int]$plans[0].Conflicts -eq 0)
     $reportComplete=($null -ne $script:LastReport -and $script:LastReport.Result -eq 'DIAGNOSTICO_COMPLETADO_SIN_CAMBIOS')
-    $apply.Enabled=(-not $Busy) -and $ready -and $reportComplete -and (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'ParcheCAD.Reglas.ps1') -PathType Leaf)
+    $checksOK=$false
+    $recoveryOK=$false
+    if($reportComplete) {
+        $checks=@($script:LastReport.Checks)
+        $checksOK=($checks.Count -eq 10 -and @($checks | Where-Object {$_.Status -ne 'OK'}).Count -eq 0)
+        $history=@($script:LastReport.Sections.Historico | Where-Object {$null -ne $_})
+        if($history.Count -eq 1 -and $null -ne $history[0].Recovery) {
+            $rec=$history[0].Recovery
+            $recoveryOK=($rec.Status -in @('OK','SIN_RESPALDOS') -and [int]$rec.NeedsReview -eq 0 -and [int]$rec.Unverified -eq 0)
+        }
+    }
+    $apply.Enabled=(-not $Busy) -and ($null -eq $script:AdminProc) -and $ready -and $checksOK -and $recoveryOK -and (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'ParcheCAD.Reglas.ps1') -PathType Leaf)
     $rollback.Enabled=(-not $Busy) -and (Test-Path -LiteralPath (Join-Path $script:Reports 'operaciones') -PathType Container)
 }
 function PCAD-ReadLog([string]$File) {
@@ -223,7 +234,12 @@ $apply.Add_Click({
     if($null -eq $script:LastReport -or $script:LastReport.Result -ne 'DIAGNOSTICO_COMPLETADO_SIN_CAMBIOS'){return}
     $p=@($script:LastReport.Sections.PolicyPreview)
     if($p.Count -ne 1 -or [int]$p[0].Count -le 0 -or [int]$p[0].Conflicts -gt 0){return}
-    if(@($script:LastReport.Checks|Where-Object {$_.Status -ne 'OK'}).Count -gt 0){return}
+    if(@($script:LastReport.Checks).Count -ne 10 -or
+       @($script:LastReport.Checks|Where-Object {$_.Status -ne 'OK'}).Count -gt 0){return}
+    $history=@($script:LastReport.Sections.Historico | Where-Object {$null -ne $_})
+    if($history.Count -ne 1 -or $null -eq $history[0].Recovery -or
+       $history[0].Recovery.Status -notin @('OK','SIN_RESPALDOS') -or
+       [int]$history[0].Recovery.NeedsReview -gt 0 -or [int]$history[0].Recovery.Unverified -gt 0){return}
     $q=('Crear hasta {0} reglas salientes para AutoCAD 2023-2027? Puede afectar LAN y funciones/licencias. NO controla WebView2 compartido. Pedira administrador y confirmacion adicional.' -f $p[0].Count)
     if([Windows.Forms.MessageBox]::Show($q,'Confirmar bloqueo','YesNo','Warning') -eq 'Yes'){PCAD-LaunchAdmin -Mode 'Apply'}
 })
@@ -280,6 +296,14 @@ if($SelfTest){
     PCAD-Busy $false
     if($apply.Enabled){throw 'GUI selftest: partial diagnostics allowed apply'}
     $script:LastReport.Result='DIAGNOSTICO_COMPLETADO_SIN_CAMBIOS'
+    PCAD-Busy $false
+    if($apply.Enabled){throw 'GUI selftest: missing recovery evidence allowed apply'}
+    $script:LastReport | Add-Member -NotePropertyName Checks -NotePropertyValue @((1..10)|ForEach-Object{[pscustomobject]@{Status='OK'}})
+    $script:LastReport.Sections | Add-Member -NotePropertyName Historico -NotePropertyValue @([pscustomobject]@{Recovery=[pscustomobject]@{Status='PARCIAL';NeedsReview=1;Unverified=0}})
+    PCAD-Busy $false
+    if($apply.Enabled){throw 'GUI selftest: incomplete recovery allowed apply'}
+    $script:LastReport.Sections.Historico[0].Recovery.Status='OK'
+    $script:LastReport.Sections.Historico[0].Recovery.NeedsReview=0
     PCAD-Busy $false
     if(!$apply.Enabled){throw 'GUI selftest: valid preview did not enable apply'}
     PCAD-Busy $true
