@@ -1,5 +1,7 @@
 # ParcheCAD 4.0 F2 - panel diagnostico no bloqueante. SOLO LECTURA.
 #Requires -Version 5.1
+[CmdletBinding()]
+param([switch]$SelfTest)
 Set-StrictMode -Version 2.0
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName System.Windows.Forms
@@ -278,6 +280,15 @@ $form.Add_FormClosing({
     }
 })
 $form.Add_Shown({PCAD-Begin})
+if($SelfTest) {
+    if(!$form.Controls.Contains($preview) -or !$form.Controls.Contains($apply) -or
+       !$form.Controls.Contains($rollback) -or $apply.Enabled -or $rollback.Enabled) {
+        throw 'SELFTEST FAIL: faltan controles o existe alguna accion administrativa habilitada antes de analizar.'
+    }
+    Write-Host 'PASS GUI: WinForms inicializado y cambios administrativos deshabilitados antes de analizar.'
+    $form.Dispose()
+    exit 0
+}
 [void][Windows.Forms.Application]::Run($form)
 ) {
         [void][Windows.Forms.MessageBox]::Show('Respaldo no valido o fuera del directorio esperado.','ParcheCAD')
