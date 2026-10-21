@@ -12,16 +12,17 @@ Hasta F6, `Get-PCADRecoveryOverview` podía informar respaldos incompletos pero 
 - `src/ParcheCAD.Diagnostico.ps1`: la etapa `Historico` pasa a `PARCIAL` cuando la recuperación no es verificable; el reporte general deja de presentar `DIAGNOSTICO_COMPLETADO_SIN_CAMBIOS`.
 - `src/ParcheCAD.Reglas.ps1`: `Apply` consulta la recuperación antes de pedir confirmación y otra vez inmediatamente antes de aplicar. `Preview` sigue siendo de solo lectura; `Rollback` sigue disponible para resolver el problema.
 - `src/ParcheCAD.Panel.ps1`: `Aplicar` requiere informe completo, **10/10 etapas OK**, plan sin conflictos y recuperación sana. Si faltan secciones del informe, se deshabilita sin lanzar excepciones bajo `Set-StrictMode`.
+- `tests/F7.Diagnostico.Integration.ps1`: en un Windows GitHub-hosted descartable introduce un `.pending` de prueba, ejecuta las diez etapas del diagnóstico y exige `PARCIAL_NO_VERIFICADO` (código 2), sin alterar el firewall.
 - `tests/F7.Tests.ps1`: estados limpio, `CREATING`, corrupto, `.pending`, `.prev` huérfano y normalización posterior. Test F5 actualizado para exigir `PARCIAL` en un journal interrumpido.
 - La autoevaluación WinForms cubre ausencia de campos, reporte parcial, recuperación pendiente, estado sano y consulta en ejecución.
 
 ## Evidencia verificada
 
-**GitHub Actions CI #56: 4/4 PASS** — https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39538100660
+**GitHub Actions CI #63: 4/4 PASS** — https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39538578854
 
 | Trabajo | Evidencia |
 |---|---|
-| Windows PowerShell 5.1 | Suites F0–F5/F7; panel WinForms SelfTest; diagnóstico y vista previa |
+| Windows PowerShell 5.1 | Suites F0–F5/F7; WinForms SelfTest; diagnóstico y vista previa; **integración real del diagnóstico ante `.pending` con salida PARCIAL (código 2)** |
 | PowerShell 7 | Suites F0–F5/F7 |
 | Firewall real temporal | Creación, repetición sin duplicados y recuperación de regla temporal en GitHub-hosted Windows |
 | ZIP DEV | Dos builds deterministas, hashes y CLI/WinForms SelfTest ejecutados desde extracción |
