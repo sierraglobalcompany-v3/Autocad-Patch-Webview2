@@ -183,6 +183,18 @@ function PCAD-Finish {
     if($planRows.Count -gt 0 -and $null -ne $planRows[0]) {
         $lines.Add(('Vista previa F4: {0} reglas candidatas, {1} conflictos, {2} excluidos; NINGUNA regla aplicada' -f $planRows[0].Count,$planRows[0].Conflicts,@($planRows[0].Excluded).Count))
     }
+    $coverage=@(Get-PCADReportRows -Object $ui.Sections -Name 'Coverage')
+    if($coverage.Count -eq 1){
+        $cov=$coverage[0]
+        $lines.Add(('F11 cobertura NO CERTIFICADA: EXE candidatos {0}, reglas propias presentes {1}, ausentes {2}, sin verificar {3}' -f $cov.CandidateProgramRules,$cov.ProgramRulesPresent,$cov.ProgramRulesMissing,$cov.ProgramRulesUnknown))
+        $lines.Add(('Servicios Autodesk: {0}; TCP instantanea: {1}; UDP endpoints: {2}; WebView2: {3}' -f $cov.AutodeskServicesInventoried,$cov.TcpEntriesObserved,$cov.UdpEndpointsObserved,$cov.WebViewProcessesObserved))
+        foreach($group in @($cov.Rows)){
+            $lines.Add(('  {0}: {1} / {2}' -f $group.Category,$group.Count,$group.Policy))
+        }
+        $lines.Add('Reglas presentes no prueban bloqueo de trafico. WebView2 excluido.')
+    }else{
+        $lines.Add('F11 cobertura: INDETERMINADA (matriz no disponible).')
+    }
     foreach($c in $ui.Checks){
         $cSection=Get-PCADReportField -Object $c -Name 'Section'
         $cStatus=Get-PCADReportField -Object $c -Name 'Status'
@@ -373,6 +385,12 @@ if($InteractionSelfTest){
         $ui=Get-PCADReportUiState -Report $script:LastReport -ExitCode $script:LastExitCode
         if(!$start.Enabled -or $cancel.Enabled -or $apply.Enabled){throw 'F9: wrong controls after read-only diagnostic on clean runner'}
         if($status.Text -cne $ui.Description){throw 'F9: GUI header disagrees with validator'}
+        $cov=@(Get-PCADReportRows -Object $ui.Sections -Name 'Coverage')
+        if($cov.Count -ne 1 -or [string]$cov[0].Status -cne 'COBERTURA_NO_CERTIFICADA' -or
+           $cov[0].AllAutodeskTrafficBlockedVerified -ne $false -or
+           $details.Text -notmatch 'F11 cobertura NO CERTIFICADA'){
+            throw 'F11: diagnostic child/UI did not expose honest coverage matrix'
+        }
         Write-Host ('F9 PASS: Analyze handler -> read-only Windows child -> report -> safe status ({0}).' -f $ui.Result)
 
         Write-Host 'F9: dispatch Cancel handler against an owned dummy sleeping process.'
