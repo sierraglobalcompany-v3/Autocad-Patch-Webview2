@@ -20,6 +20,24 @@ function Get-PCADProperty {
     if ($null -eq $p -or $null -eq $p.Value) { return '' }
     return [string]$p.Value
 }
+function Resolve-PCADRegistryInstallDirectory {
+    [CmdletBinding()]
+    param([string]$InstallLocation,[string]$DisplayIcon)
+    $candidate=([string]$InstallLocation).Trim().Trim('"').TrimEnd('\')
+    if($candidate -and (Test-Path -LiteralPath (Join-Path $candidate 'acad.exe') -PathType Leaf)){
+        return $candidate
+    }
+    # Parse DisplayIcon as DATA; never run registry-provided commands.
+    $icon=([string]$DisplayIcon).Trim()
+    $match=[regex]::Match($icon,'(?i)^\s*(?:"(?<exe>[a-z]:\\[^"]*?\\acad\.exe)"|(?<exe>[a-z]:\\.+?\\acad\.exe))(?:\s*,\s*-?\d+)?\s*$')
+    if($match.Success){
+        $exe=$match.Groups['exe'].Value
+        if(Test-Path -LiteralPath $exe -PathType Leaf){
+            return (Split-Path -Parent $exe)
+        }
+    }
+    return $candidate
+}
 function Get-PCADInstallations {
     [CmdletBinding()]
     param([switch]$InternalPaths)
@@ -33,7 +51,7 @@ function Get-PCADInstallations {
             if (!(Test-PCADAutoCADName $name)) { continue }
             $year=[int]([regex]::Match($name,'202[3-7]').Value)
             [void]$candidates.Add([pscustomobject]@{
-                Year=$year; Dir=(Get-PCADProperty $entry 'InstallLocation');
+                Year=$year; Dir=(Resolve-PCADRegistryInstallDirectory -InstallLocation (Get-PCADProperty $entry 'InstallLocation') -DisplayIcon (Get-PCADProperty $entry 'DisplayIcon'));
                 Product=$name; Evidence='REGISTRO'
             })
         }

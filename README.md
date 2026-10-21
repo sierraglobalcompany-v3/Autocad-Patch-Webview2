@@ -2,7 +2,7 @@
 
 Proyecto de control y diagnóstico de conectividad para instalaciones de AutoCAD 2023, 2024, 2025, 2026 y 2027 en Windows.
 
-> **Estado: desarrollo F0–F5 en PRs Draft.** CI Windows PS5.1/7 y firewall temporal verde; **sin release 4.0 ni QA gráfica integral/AutoCAD real**. Las versiones históricas 2.x y 3.x no son releases de este repositorio.
+> **Estado: desarrollo F0–F6 en PRs Draft, con ZIP técnico DEV disponible en GitHub Actions. NO RC1, NO release.** CI Windows PS5.1/7 y firewall temporal verde; **sin release 4.0 ni QA gráfica integral/AutoCAD real**. Las versiones históricas 2.x y 3.x no son releases de este repositorio.
 
 ## Objetivo
 
@@ -31,13 +31,15 @@ Proyecto de control y diagnóstico de conectividad para instalaciones de AutoCAD
 5. **F4 — Controles de firewall**: solo acciones explícitas, reversibles, probadas y con vista previa de impacto.
 6. **F5 — QA / release**: validación real con Windows 10/11, PowerShell 5.1, antivirus activo y varias instalaciones.
 
-**Estado técnico:** F0–F2 inventario y GUI, F3 atribución observacional WebView2, F4 reglas salientes y reversión verificadas con mocks y un ejecutable temporal en Windows, F5 soporte de rutas personalizadas, saneamiento de reportes y evaluación de respaldo. La vista previa no crea reglas. **No hay certificación de aislamiento completo de Autodesk/WebView2.**
+**Estado técnico:** F0–F2 inventario y GUI, F3 atribución observacional WebView2, F4 reglas salientes y reversión verificadas con mocks y un ejecutable temporal en Windows, F5 soporte de rutas personalizadas y saneamiento, F6 detección de DisplayIcon, recuperación de regla real interrumpida simulada y ZIP verificable. La vista previa no crea reglas. **No hay certificación de aislamiento completo de Autodesk/WebView2.**
 
 Para ejecutar el diagnóstico en consola: `powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File .\src\ParcheCAD.Diagnostico.ps1`. Para visualizar un plan de reglas de solo lectura: `powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File .\src\ParcheCAD.Reglas.ps1 -Mode Preview`.
 
-**No ejecutar todavía Apply/Rollback en el equipo principal**: aunque el ciclo de reglas real pasó en un Windows descartable, faltan QA visual de la interfaz, AutoCAD instalado, interrupciones y verificaciones de cobertura. El panel ofrece cambios solo tras UAC y doble confirmación.
+**No ejecutar todavía Apply/Rollback en el equipo principal**: aunque los escenarios de reglas temporales y recuperación de journal CREATING pasaron en un Windows descartable, faltan QA visual de la interfaz, AutoCAD instalado, reinicio/interrupción abrupta real y verificaciones de cobertura. El panel ofrece cambios solo tras UAC y doble confirmación.
 
-**NEXT:** cerrar F5 con QA gráfica interactiva y errores/reinicio en Windows aislado; completar la cobertura documentada y preparar una única RC1 integrada. No se pide probar cada módulo al usuario. Evidencia: `docs/F5_INTEGRACION_RECUPERACION_QA.md`.
+**Paquete técnico DEV (NO RELEASE):** `tools/Build-ParcheCAD.ps1` genera un ZIP sin logs privados, con manifiesto de hashes. GitHub Actions lo valida dos veces y publica un artifact temporal de desarrollo; no se recomienda ejecutarlo en el computador principal antes de RC1. Ver `docs/F6_PAQUETE_PRE_RC.md`.
+
+**NEXT:** QA gráfica interactiva/UAC y reinicio Windows aislado, AutoCAD real y cobertura de WebView2; después RC1 integrada. No solicitar al usuario pruebas por módulo.
 
 ## Desarrollo
 

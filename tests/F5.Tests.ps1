@@ -28,6 +28,11 @@ try {
     $helper=Join-Path $custom 'AcPerfMonAgent.exe'
     [IO.File]::WriteAllBytes($main,[byte[]]@(0))
     [IO.File]::WriteAllBytes($helper,[byte[]]@(0))
+    Assert-F5 ((Resolve-PCADRegistryInstallDirectory -InstallLocation '' -DisplayIcon ('"'+$main+'",0')) -ieq $custom) 'DisplayIcon quoted fallback'
+    Assert-F5 ((Resolve-PCADRegistryInstallDirectory -InstallLocation '' -DisplayIcon ($main+',-1')) -ieq $custom) 'DisplayIcon unquoted fallback'
+    Assert-F5 ((Resolve-PCADRegistryInstallDirectory -InstallLocation '' -DisplayIcon '"C:\Unknown\acad.exe",0') -eq '') 'DisplayIcon nonexistent ignored'
+    Assert-F5 ((Resolve-PCADRegistryInstallDirectory -InstallLocation '' -DisplayIcon '"C:\Windows\cmd.exe",0') -eq '') 'DisplayIcon other program ignored'
+    Assert-F5 ((Resolve-PCADRegistryInstallDirectory -InstallLocation $custom -DisplayIcon '"C:\Unknown\acad.exe",0') -ieq $custom) 'Existing InstallLocation priority'
     $inst=@([pscustomobject]@{Year=2025;Product='AutoCAD 2025';Path=$main;FileFound=$true})
     $cat=Get-PCADExecutableCatalog -Installations $inst -InternalPaths
     Assert-F5 ($cat.Status -eq 'OK' -and @($cat.Entries).Count -eq 2) 'private custom installation discovered'

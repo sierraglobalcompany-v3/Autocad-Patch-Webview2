@@ -51,6 +51,29 @@ try {
     $after=Get-PCADActualRuleStatus -RuleName $ruleName -Program $exe
     if($after.State -ne 'MISSING'){throw 'Regla persiste tras rollback.'}
     Write-Host 'PASS REAL: regla temporal saliente creada, identificada, repetida sin duplicar y revertida tras eliminar EXE.' -ForegroundColor Green
+    # Simula una interrupcion despues de que Windows crea la regla, pero
+    # antes de registrar CREATED en el journal. No hay procesos ni AV alterados.
+    $manifestCrash=Join-Path (Join-Path $testDir 'backups') ('PCAD4_'+[guid]::NewGuid().ToString('N')+'.json')
+    $fixture=[pscustomobject]@{
+        Schema='PCAD4_OPERATION_1';OperationId=[guid]::NewGuid().ToString('N')
+        CreatedAt=(Get-Date).ToString('o');FinishedAt='';Status='PREPARED'
+        Operations=@([pscustomobject]@{
+            RuleName=$ruleName;Group='PCAD4_MANAGED';Program=$exe;Year=2023
+            InstallationRoot=$product;Direction='Outbound';Action='Block';Profile='Any'
+            DisplayName='ParcheCAD 4.0 - AutoCAD 2023 - acad.exe';State='CREATING'
+        })
+    }
+    Write-PCADJournal -Journal $fixture -File $manifestCrash
+    New-NetFirewallRule -Name $ruleName -DisplayName 'ParcheCAD 4.0 - AutoCAD 2023 - acad.exe' -Group 'PCAD4_MANAGED' -Program $exe -Direction Outbound -Action Block -Enabled True -Profile Any -PolicyStore PersistentStore -ErrorAction Stop | Out-Null
+    if((Get-PCADActualRuleStatus -RuleName $ruleName -Program $exe).State -ne 'EXISTS_VALID'){throw 'No se creo regla temporal del escenario interrumpido.'}
+    $recoverCrash=Invoke-PCADRollbackRules -JournalPath $manifestCrash -Commit
+    if($recoverCrash.Status -ne 'ROLLED_BACK' -or $recoverCrash.Removed -ne 1){throw 'No se recupero regla real con journal CREATING.'}
+    if((Get-PCADActualRuleStatus -RuleName $ruleName -Program $exe).State -ne 'MISSING'){throw 'Regla permanecio tras recuperacion interrumpida.'}
+    # El mismo journal recuperado no debe volver a retirar reglas.
+    $again=Invoke-PCADRollbackRules -JournalPath $manifestCrash -Commit
+    if($again.Removed -ne 0){throw 'Rollback interrumpido no fue idempotente.'}
+    Write-Host 'PASS REAL: recuperacion tras interrupcion CREATING, sin ejecutable y sin reglas residuales.' -ForegroundColor Green
+
 } finally {
     if($ruleName) {
         $remaining=Get-NetFirewallRule -Name $ruleName -PolicyStore PersistentStore -ErrorAction SilentlyContinue

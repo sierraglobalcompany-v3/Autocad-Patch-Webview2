@@ -60,3 +60,28 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           & .\tests\F4.RealFirewall.Integration.ps1
+
+  f6-zip-package:
+    # Artifact de desarrollo: nunca un release/instalador certificado.
+    runs-on: windows-2022
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deterministic package, hash verification, extracted smoke
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          & .\tests\F6.Package.Tests.ps1
+      - name: Produce curated pre-RC development ZIP
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          & .\tools\Build-ParcheCAD.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ParcheCAD_4.0_DEV_NOT_RELEASE
+          path: |
+            dist/ParcheCAD_4.0_DEV_NO_RELEASE.zip
+            dist/ParcheCAD_4.0_DEV_NO_RELEASE.zip.sha256
+          if-no-files-found: error
+          retention-days: 14
