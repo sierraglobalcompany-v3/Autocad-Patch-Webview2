@@ -43,7 +43,7 @@ function Get-PCADCatalogTree {
     $out=New-Object System.Collections.ArrayList
     $warnings=New-Object System.Collections.ArrayList
     $partial=$false
-    if([string]::IsNullOrWhiteSpace($Root) -or ![IO.Path]::IsPathRooted($Root) -or $Root -match '^\\\\'){
+    if([string]::IsNullOrWhiteSpace($Root) -or !([IO.Path]::IsPathRooted($Root)) -or $Root -match '^\\\\'){
         return [pscustomobject]@{Entries=@();Warnings=@('Raiz no local');Partial=$true}
     }
     $stack=New-Object System.Collections.Stack
