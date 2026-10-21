@@ -89,7 +89,7 @@ Write-Progress -Activity 'ParcheCAD 4.0 / Diagnostico de solo lectura' -Complete
 $errors=@($checks | Where-Object {$_.Status -ne 'OK'}).Count
 $overall=if($errors -gt 0){'PARCIAL_NO_VERIFICADO'}else{'DIAGNOSTICO_COMPLETADO_SIN_CAMBIOS'}
 $report=[ordered]@{
-    SchemaVersion=1;Tool='ParcheCAD';Phase='F0';ReadOnly=$true
+    SchemaVersion=1;Tool='ParcheCAD';Phase='F0-F5_DIAGNOSTICO';ReadOnly=$true
     GeneratedAt=(Get-Date).ToString('yyyy-MM-ddTHH:mm:sszzz')
     Result=$overall;ElapsedSeconds=[math]::Round(((Get-Date)-$started).TotalSeconds,2)
     Limit='Inventario puntual; NO verifica bloqueo total de trafico ni ausencia de WebView2.'
@@ -110,7 +110,7 @@ if (!$NoExport) {
         $utf8=New-Object System.Text.UTF8Encoding($false)
         [IO.File]::WriteAllText((Join-Path $folder 'diagnostico.json'),($report | ConvertTo-Json -Depth 9),$utf8)
         $lines=New-Object System.Collections.Generic.List[string]
-        $lines.Add('ParcheCAD 4.0 F0 - SOLO LECTURA')
+        $lines.Add('ParcheCAD 4.0 - DIAGNOSTICO SOLO LECTURA')
         $lines.Add(('Resultado: {0}' -f $overall))
         $lines.Add(('Fecha: {0}' -f $report.GeneratedAt))
         $lines.Add('')
