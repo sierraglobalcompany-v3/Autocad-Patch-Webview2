@@ -30,9 +30,9 @@ No afirmar que «todo Autodesk está desconectado» ni que «AutoCAD no usa WebV
 | F4 | Planificador Outbound por EXE de producto, identificador estable, Apply/rollback explícitos y journal | Mocks e integración con firewall real **únicamente en Windows efímero** |
 | F5 | Rutas personalizadas privadas, reportes saneados, evaluación de journal aplicado/incompleto/corrupto | CI y fixtures |
 | F6 | Fallback por DisplayIcon verificando acad.exe; recuperación de journal CREATING con regla temporal real; ZIP DEV determinista con SHA256 | **CI #49 4/4 PASS** |
-| F7 | Fail-closed cuando existen operaciones y archivos de recuperación pendientes; GUI/CLI no aplican nuevas reglas | **CI #56 4/4 PASS** |
+| F7 | Fail-closed cuando existen operaciones y archivos de recuperación pendientes; GUI/CLI no aplican nuevas reglas | **CI #63 4/4 PASS** |
 
-**CI #56:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39538100660 — PowerShell 5.1, PowerShell 7, integración real sobre regla temporal y construcción/extracción/verificación de ZIP. Se corrigió un fallo de manejo de campos ausentes en WinForms antes de PASS; F6 resolvió el parser DisplayIcon.
+**CI #63:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39538578854 — PowerShell 5.1, PowerShell 7, integración real sobre regla temporal y construcción/extracción/verificación de ZIP. Se corrigió un fallo de manejo de campos ausentes en WinForms antes de PASS; F6 resolvió el parser DisplayIcon.
 
 ## 3. Arquitectura vigente y reconstrucción desde GitHub
 
@@ -78,7 +78,7 @@ PRs apilados #3–#9 **Draft**, sin merge, deploy ni Release. CI verde **no** im
 - **Diagnóstico:** etapa Histórico propagada como PARCIAL; reporte no anuncia éxito completo.
 - **CLI Apply:** `Assert-PCADRecoveryReady` antes y después de pedir confirmación. **Rollback no queda bloqueado**, ya que es el mecanismo de solución.
 - **GUI:** exige 10/10 comprobaciones OK, histórico verificable y plan sin conflictos; informe sin campos deshabilita el botón sin colapsar WinForms.
-- **Pruebas:** suites F0–F5 + F7, WinForms SelfTest, integración de regla temporal Windows y empaquetado reproducible. **CI #56 (4/4 PASS):** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39538100660.
+- **Pruebas:** suites F0–F5 + F7, WinForms SelfTest, **diagnóstico Windows real con journal `.pending` que exige salida PARCIAL**, integración de regla temporal y empaquetado reproducible. **CI #63 (4/4 PASS):** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39538100660.
 - Evidencia: `docs/F7_FAILCLOSED_GUI_QA.md`. Actualizar la cifra CI si algún cambio posterior activa un nuevo run.
 - **PENDIENTE:** QA visual interactiva con UAC, reinstalación/reinicio, AutoCAD real 2023–2027, cobertura Autodesk compartido, aislamiento WebView2 exclusivo. Sin certificación de bloqueo total.
 
