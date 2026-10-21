@@ -1,4 +1,4 @@
-name: ParcheCAD Windows QA (F0-F9)
+name: ParcheCAD Windows QA (F0-F10)
 on:
   pull_request:
   push:
@@ -37,7 +37,7 @@ jobs:
           $ErrorActionPreference='Stop'
           & "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -STA -File .\src\ParcheCAD.Panel.ps1 -SelfTest
           if($LASTEXITCODE -ne 0) { throw "WinForms selftest error $LASTEXITCODE" }
-      - name: F9 WinForms event-handler smoke without interactive desktop or UAC
+      - name: F9/F10 WinForms events, owned PID cancellation/close without desktop or UAC
         shell: powershell
         timeout-minutes: 3
         run: |
@@ -72,7 +72,7 @@ jobs:
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
-      - name: Apply and revert ONLY a temporary test-program firewall rule
+      - name: Apply, relaunch PS5.1 and recover ONLY temporary test-program firewall rule
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
