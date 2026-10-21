@@ -1,5 +1,5 @@
 # SPEC MAESTRA — ParcheCAD 4.0
-**Estado:** F0–F12 en desarrollo con QA Windows y ZIP DEV reproducible, no RC ni release · **Repositorio:** sierraglobalcompany-v3/Autocad-Patch-Webview2 · **Fecha:** 2026-10-20
+**Estado:** F0–F13 en desarrollo con QA Windows y ZIP DEV reproducible, no RC ni release · **Repositorio:** sierraglobalcompany-v3/Autocad-Patch-Webview2 · **Fecha:** 2026-10-20
 
 ## Objetivo y definiciones de éxito
 Inventariar AutoCAD 2023–2027, sus ejecutables y servicios, procesos WebView2, reglas de firewall y conexiones. Evaluar aislamiento de conexiones de Autodesk, aceptando pérdida de funciones en línea, sin afectar WebView2 de WhatsApp/Outlook.
@@ -123,5 +123,12 @@ Nunca deshabilitar AVG/Defender, añadir exclusiones, evadir alertas, eliminar l
 - `tools/Invoke-ParcheCADRC12.ps1` produce JSON y TXT con conteos y estado, sin rutas, IP ni líneas de comando privadas. No ejecuta Apply/Rollback, UAC, binarios AutoCAD ni cambios en servicios o antivirus.
 - QA PS5.1/7 con fixtures y en Windows real desechable: diagnóstico solo lectura seguido del evaluador (dos instantáneas iguales como smoke, **no prueba de antes/después**). Guía: `docs/F12_GATE_RC1_QA_INTEGRADA.md`.
 - Mantener las cuatro leyes KISS, anti-ruido, no parches, UX; corregir en origen con pruebas transversales. Sin WebView2 Microsoft global ni automatismos de licenciamiento.
+
+## F13 — comprobar tráfico TCP real con ejecutable ficticio
+
+- **Alcance:** `tests/F13.SyntheticEgress.Integration.ps1` en Windows GitHub-hosted compila un cliente TCP IPv4 ficticio y un EXE de control idéntico en ruta distinta; verifica conexión inicial de ambos, bloqueo efectivo de dos intentos únicamente para el primero y conexión restablecida tras rollback PCAD4.
+- Reutiliza el motor F4, valida línea base, identidad de reglas y limpieza propia `finally`; no crea módulos ni servicios residentes ni modifica AutoCAD, WebView2 Microsoft, licencias o antivirus.
+- Es evidencia efectiva de **una regla Outbound por ruta aplicada a un EXE de prueba**. No implica cobertura de AutoCAD instalado, Autodesk compartido, UDP, IPv6, LAN ni WebView2 exclusivo. `Get-PCADRC12Assessment` sigue BLOCKED.
+- Evidencia: `docs/F13_PRUEBA_EGRESO_TCP_REAL.md` y pipeline GitHub Actions. No confundir configuración de reglas, prueba sintética y certificación de aplicación real.
 
 **NEXT: una única QA integrada de aceptación en Windows con escritorio auténticamente interactivo, AutoCAD instalado, AVG habilitado, trazas de red y reinicio; si no existe entorno/evidencia, RC1 sigue BLOCKED. PRs Draft, no merge ni release.**

@@ -1,4 +1,4 @@
-name: ParcheCAD Windows QA (F0-F12)
+name: ParcheCAD Windows QA (F0-F13)
 on:
   pull_request:
   push:
@@ -87,6 +87,12 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           & .\tests\F4.RealFirewall.Integration.ps1
+      - name: F13 synthetic real TCP egress allowed-denied-restored (owned test EXE only)
+        shell: powershell
+        timeout-minutes: 6
+        run: |
+          $ErrorActionPreference='Stop'
+          & .\tests\F13.SyntheticEgress.Integration.ps1
 
   f6-zip-package:
     # Artifact de desarrollo: nunca un release/instalador certificado.
