@@ -2,7 +2,7 @@
 
 Proyecto de control y diagnóstico de conectividad para instalaciones de AutoCAD 2023, 2024, 2025, 2026 y 2027 en Windows.
 
-> **Estado: desarrollo F0–F13 en PRs Draft, con ZIP técnico DEV disponible en GitHub Actions. NO RC1, NO release.** CI Windows PS5.1/7 y firewall temporal verde; **sin release 4.0 ni QA gráfica integral/AutoCAD real**. Las versiones históricas 2.x y 3.x no son releases de este repositorio.
+> **Estado: desarrollo F0–F14 en PRs Draft, con ZIP técnico DEV disponible en GitHub Actions. NO RC1, NO release.** CI Windows PS5.1/7 y firewall temporal verde; **sin release 4.0 ni QA gráfica integral/AutoCAD real**. Las versiones históricas 2.x y 3.x no son releases de este repositorio.
 
 ## Objetivo
 
@@ -42,6 +42,8 @@ Para ejecutar el diagnóstico en consola: `powershell.exe -NoProfile -ExecutionP
 **F12 QA integrada (solo lectura):** `tools/Invoke-ParcheCADRC12.ps1` compara dos diagnósticos ya generados, entrega una matriz de diez puertas y mantiene RC1 como BLOCKED hasta comprobar AutoCAD real, tráfico, WebView2, UAC, reinicio y AVG. Guía: `docs/F12_GATE_RC1_QA_INTEGRADA.md`.
 
 **F13 evidencia de tráfico:** `docs/F13_PRUEBA_EGRESO_TCP_REAL.md`, prueba sintética de conexión antes/bloqueo/después; **NO** certifica AutoCAD real, servicios Autodesk o WebView2.
+
+**F14 inventario compartido:** `docs/F14_INVENTARIO_COMPARTIDO_QA.md`. Se exploran carpetas habituales de componentes Autodesk compartidos con límites explícitos; aparecen en el inventario, **no** en las reglas automáticas. Un escaneo parcial se muestra como tal.
 
 **NEXT:** preparar ejecución única de QA integrada en Windows de escritorio aislado, con AutoCAD real, sin pedir pruebas parciales en el computador principal. Si ese entorno no está disponible, las puertas siguen BLOCKED y no se declara RC1.
 

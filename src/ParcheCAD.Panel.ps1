@@ -175,6 +175,12 @@ function PCAD-Finish {
     $lines.Add(("Resultado: {0}" -f $ui.Result))
     $catalogRows=@(Get-PCADReportRows -Object $ui.Sections -Name 'Catalog')
     $lines.Add(("Catalogo: {0} ejecutables" -f $catalogRows.Count))
+    $scope=@(Get-PCADReportRows -Object $ui.Sections -Name 'CatalogScope')
+    if($scope.Count -eq 1){
+        $lines.Add(('F14 alcance de EXE: AutoCAD {0}; Autodesk compartido {1}; bloqueo de compartidos: NO' -f
+           (Get-PCADReportField -Object $scope[0] -Name 'ProductStatus'),
+           (Get-PCADReportField -Object $scope[0] -Name 'SharedStatus')))
+    }
     $network=@(Get-PCADReportRows -Object $ui.Sections -Name 'NetworkOverview')
     if($network.Count -gt 0 -and $null -ne $network[0]) {
         $lines.Add(('Atribucion F3: {0} WebView2 observados, {1} AutoCAD probable(s), aislamiento NO VERIFICADO' -f $network[0].TotalWebView2,$network[0].ProbableAutoCAD))
@@ -385,6 +391,11 @@ if($InteractionSelfTest){
         $ui=Get-PCADReportUiState -Report $script:LastReport -ExitCode $script:LastExitCode
         if(!$start.Enabled -or $cancel.Enabled -or $apply.Enabled){throw 'F9: wrong controls after read-only diagnostic on clean runner'}
         if($status.Text -cne $ui.Description){throw 'F9: GUI header disagrees with validator'}
+        $scope=@(Get-PCADReportRows -Object $ui.Sections -Name 'CatalogScope')
+        if($scope.Count -ne 1 -or $scope[0].SharedAutomaticBlocking -ne $false -or
+           $details.Text -notmatch 'F14 alcance de EXE'){
+            throw 'F14: report/UI missing shared inventory warning or it allowed automatic shared blocking'
+        }
         $cov=@(Get-PCADReportRows -Object $ui.Sections -Name 'Coverage')
         if($cov.Count -ne 1 -or [string]$cov[0].Status -cne 'COBERTURA_NO_CERTIFICADA' -or
            $cov[0].AllAutodeskTrafficBlockedVerified -ne $false -or

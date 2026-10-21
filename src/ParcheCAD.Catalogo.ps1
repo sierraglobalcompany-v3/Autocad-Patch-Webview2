@@ -35,6 +35,58 @@ function Get-PCADFileClass {
     }
 }
 
+
+# One bounded and symlink-safe walker for AutoCAD product and Autodesk shared roots.
+function Get-PCADCatalogTree {
+    [CmdletBinding()]
+    param([string]$Root,[int]$MaxFiles=900,[int]$MaxDepth=7)
+    $out=New-Object System.Collections.ArrayList
+    $warnings=New-Object System.Collections.ArrayList
+    $partial=$false
+    if([string]::IsNullOrWhiteSpace($Root) -or !([IO.Path]::IsPathRooted($Root)) -or $Root -match '^\\\\'){
+        return [pscustomobject]@{Entries=@();Warnings=@('Raiz no local');Partial=$true}
+    }
+    $stack=New-Object System.Collections.Stack
+    $stack.Push([pscustomobject]@{Path=$Root;Depth=0})
+    while($stack.Count -gt 0){
+        $node=$stack.Pop()
+        try{
+            $dir=Get-Item -LiteralPath $node.Path -Force -ErrorAction Stop
+            if(($dir.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){continue}
+            foreach($child in @(Get-ChildItem -LiteralPath $dir.FullName -Force -ErrorAction Stop)){
+                if(($child.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){continue}
+                if($child.PSIsContainer){
+                    if([int]$node.Depth -ge $MaxDepth){$partial=$true}
+                    else{$stack.Push([pscustomobject]@{Path=$child.FullName;Depth=([int]$node.Depth+1)})}
+                    continue
+                }
+                if($child.Extension -ine '.exe'){continue}
+                [void]$out.Add($child)
+                if($out.Count -ge $MaxFiles){$partial=$true;break}
+            }
+            if($out.Count -ge $MaxFiles){break}
+        }catch{
+            [void]$warnings.Add(('Carpeta inaccesible: '+$_.Exception.GetType().Name))
+            $partial=$true
+        }
+    }
+    if($partial){[void]$warnings.Add('Inventario limitado por profundidad, cantidad o acceso')}
+    return [pscustomobject]@{Entries=@($out.ToArray());Warnings=@($warnings.ToArray());Partial=$partial}
+}
+function Get-PCADDefaultSharedRoots {
+    $roots=New-Object System.Collections.ArrayList
+    $programFiles=@($env:ProgramW6432,$env:ProgramFiles,[Environment]::GetEnvironmentVariable('ProgramFiles(x86)')) |
+        Where-Object {$_} | Select-Object -Unique
+    foreach($pf in $programFiles){
+        foreach($relative in @('Autodesk\AdODIS','Autodesk\Autodesk Access','Autodesk\Autodesk Desktop App',
+                              'Autodesk\Identity Services','Common Files\Autodesk Shared')){
+            $root=Join-Path $pf $relative
+            if(Test-Path -LiteralPath $root -PathType Container){[void]$roots.Add($root)}
+        }
+    }
+    return @($roots.ToArray() | Select-Object -Unique)
+}
+
 function Get-PCADExecutableCatalog {
     [CmdletBinding()]
     param(
@@ -42,11 +94,15 @@ function Get-PCADExecutableCatalog {
         [AllowEmptyCollection()][object[]]$Services=@(),
         [int]$MaxFilesPerProduct=900,
         [int]$MaxDepth=7,
+        [AllowNull()][string[]]$SharedRoots=$null,
+        [int]$MaxFilesPerSharedRoot=250,
+        [int]$MaxSharedDepth=5,
         [switch]$InternalPaths
     )
     $rows=New-Object System.Collections.ArrayList
     $notes=New-Object System.Collections.ArrayList
     $seen=@{}
+    $sharedPartial=$false
     foreach($install in @($Installations)){
         if($null -eq $install -or !(($install.FileFound) -eq $true)) {continue}
         $year=[int]$install.Year
@@ -61,43 +117,59 @@ function Get-PCADExecutableCatalog {
             if(!([IO.Path]::IsPathRooted($exe)) -or !(Test-Path -LiteralPath $exe -PathType Leaf)) {
                 [void]$notes.Add("AutoCAD ${year}: archivo no disponible");continue
             }
-            $count=0; $stack=New-Object System.Collections.Stack
-            $stack.Push([pscustomobject]@{Path=$root;Depth=0})
-            while($stack.Count -gt 0 -and $count -lt $MaxFilesPerProduct) {
-                $node=$stack.Pop()
-                # Evitar junctions/symlinks al atravesar arbol.
-                $dir=Get-Item -LiteralPath $node.Path -Force -ErrorAction Stop
-                if(($dir.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){continue}
-                foreach($child in @(Get-ChildItem -LiteralPath $dir.FullName -Force -ErrorAction Stop)){
-                    if(($child.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){continue}
-                    if($child.PSIsContainer) {
-                        if([int]$node.Depth -lt $MaxDepth) {
-                            $stack.Push([pscustomobject]@{Path=$child.FullName;Depth=([int]$node.Depth+1)})
-                        }
-                        continue
-                    }
-                    if($child.Extension -ine '.exe'){continue}
-                    $key=$child.FullName.ToUpperInvariant()
-                    if($seen.ContainsKey($key)){continue}
-                    $seen[$key]=$true
-                    $classification=Get-PCADFileClass -FilePath $child.FullName -InstallationRoot $root -Year $year
-                    [void]$rows.Add([pscustomobject]@{
-                        Year=$year;Name=$child.Name;Path=$(if($InternalPaths){$child.FullName}else{Protect-PCADPath $child.FullName})
-                        InstallationRoot=$(if($InternalPaths){$root}else{Protect-PCADPath $root})
-                        Classification=$classification.Classification
-                        Confidence=$classification.Confidence;Impact=$classification.Impact
-                        Rationale=$classification.Rationale
-                        Policy='SOLO_INVENTARIO';VerifiedConnection='NO'
-                    })
-                    $count++
-                    if($count -ge $MaxFilesPerProduct){break}
-                }
+            $tree=Get-PCADCatalogTree -Root $root -MaxFiles $MaxFilesPerProduct -MaxDepth $MaxDepth
+            foreach($warning in @($tree.Warnings)){
+                [void]$notes.Add(("AutoCAD {0}: {1}" -f $year,$warning))
             }
-            if($count -ge $MaxFilesPerProduct){
-                [void]$notes.Add("AutoCAD ${year}: limite $MaxFilesPerProduct EXE; catalogo INCOMPLETO")
+            foreach($child in @($tree.Entries)){
+                $key=$child.FullName.ToUpperInvariant()
+                if($seen.ContainsKey($key)){continue}
+                $seen[$key]=$true
+                $classification=Get-PCADFileClass -FilePath $child.FullName -InstallationRoot $root -Year $year
+                [void]$rows.Add([pscustomobject]@{
+                    Year=$year;Name=$child.Name
+                    Path=$(if($InternalPaths){$child.FullName}else{Protect-PCADPath $child.FullName})
+                    InstallationRoot=$(if($InternalPaths){$root}else{Protect-PCADPath $root})
+                    Classification=$classification.Classification
+                    Confidence=$classification.Confidence;Impact=$classification.Impact
+                    Rationale=$classification.Rationale
+                    Policy='SOLO_INVENTARIO';VerifiedConnection='NO'
+                })
             }
+
         } catch {
             [void]$notes.Add(("AutoCAD ${year}: error de acceso {0}; catalogo INCOMPLETO" -f $_.Exception.GetType().Name))
+        }
+    }
+    # Inventory ONLY: shared Autodesk install roots are never automatically
+    # eligible for the product-specific firewall policy.
+    $roots=if($null -eq $SharedRoots){@(Get-PCADDefaultSharedRoots)}else{@($SharedRoots)}
+    foreach($sharedRoot in @($roots | Where-Object {$_} | Select-Object -Unique)){
+        try{
+            if(!(Test-Path -LiteralPath $sharedRoot -PathType Container)){continue}
+            $tree=Get-PCADCatalogTree -Root $sharedRoot -MaxFiles $MaxFilesPerSharedRoot -MaxDepth $MaxSharedDepth
+            if($tree.Partial){$sharedPartial=$true}
+            foreach($warning in @($tree.Warnings)){
+                [void]$notes.Add(('Autodesk compartido: '+$warning))
+            }
+            foreach($child in @($tree.Entries)){
+                $key=$child.FullName.ToUpperInvariant()
+                if($seen.ContainsKey($key)){continue}
+                $seen[$key]=$true
+                $classification=Get-PCADFileClass -FilePath $child.FullName -Kind 'SHARED'
+                [void]$rows.Add([pscustomobject]@{
+                    Year=0;Name=$child.Name
+                    Path=$(if($InternalPaths){$child.FullName}else{Protect-PCADPath $child.FullName})
+                    InstallationRoot=''
+                    Classification=$classification.Classification
+                    Confidence=$classification.Confidence;Impact=$classification.Impact
+                    Rationale=$classification.Rationale
+                    Policy='SOLO_INVENTARIO';VerifiedConnection='NO'
+                })
+            }
+        }catch{
+            $sharedPartial=$true
+            [void]$notes.Add(('Autodesk compartido: error de acceso '+$_.Exception.GetType().Name))
         }
     }
     # Servicios compartidos tienen evidencias propias, no incluirlos en el mismo grupo de AutoCAD.
@@ -119,9 +191,10 @@ function Get-PCADExecutableCatalog {
         })
     }
     return [pscustomobject]@{
-        Status=$(if(@($notes).Count -gt 0){'PARCIAL'}else{'OK'})
+        Status=$(if(@($notes | Where-Object {$_ -notmatch '^Autodesk compartido:'}).Count -gt 0){'PARCIAL'}else{'OK'})
+        SharedStatus=$(if($sharedPartial){'PARCIAL'}else{'INVENTARIO_LIMITADO'})
         Entries=@($rows.ToArray() | Sort-Object Year,Path)
         Warnings=@($notes.ToArray())
-        Important='Catalogo de descubrimiento; no es lista aprobada para bloquear.'
+        Important='Inventario de EXE. Las raices compartidas son solo lectura y no se incluyen en el plan Automatico; catalogo no certifica cobertura total.'
     }
 }
