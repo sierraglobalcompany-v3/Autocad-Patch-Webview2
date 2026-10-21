@@ -57,6 +57,11 @@ foreach ($stage in $stages) {
             Historico {
                 $journalDirectory=Join-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'informes') 'operaciones'
                 $result=@(Get-PCADLegacyOverview -Firewall @($sections['Firewall']) -Tasks @($sections['Tasks']) -JournalDirectory $journalDirectory)
+                if($result.Count -ne 1 -or $result[0].Recovery.Status -notin @('OK','SIN_RESPALDOS') -or
+                   [int]$result[0].Recovery.NeedsReview -gt 0 -or [int]$result[0].Recovery.Unverified -gt 0) {
+                    $stageStatus='PARCIAL'
+                    $stageDetail='Recuperacion o respaldos sin verificar: revisar antes de aplicar nuevas reglas.'
+                }
                 break
             }
             Connections {$result=@(Get-PCADConnections -Processes @($sections['Processes']));break}
