@@ -79,9 +79,16 @@ function PCAD-Busy([bool]$Busy) {
     $checksOK=$false
     $recoveryOK=$false
     if($reportComplete) {
-        $checks=@($script:LastReport.Checks)
+        $checks=@()
+        if($script:LastReport.PSObject.Properties['Checks']){
+            $checks=@($script:LastReport.Checks)
+        }
         $checksOK=($checks.Count -eq 10 -and @($checks | Where-Object {$_.Status -ne 'OK'}).Count -eq 0)
-        $history=@($script:LastReport.Sections.Historico | Where-Object {$null -ne $_})
+        $history=@()
+        if($script:LastReport.PSObject.Properties['Sections'] -and $null -ne $script:LastReport.Sections -and
+           $script:LastReport.Sections.PSObject.Properties['Historico']){
+            $history=@($script:LastReport.Sections.Historico | Where-Object {$null -ne $_})
+        }
         if($history.Count -eq 1 -and $null -ne $history[0].Recovery) {
             $rec=$history[0].Recovery
             $recoveryOK=($rec.Status -in @('OK','SIN_RESPALDOS') -and [int]$rec.NeedsReview -eq 0 -and [int]$rec.Unverified -eq 0)
