@@ -1,0 +1,24 @@
+name: F0 static QA
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  windows-powershell-51:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parser and fixture tests
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          & .\tests\F0.Tests.ps1
+  powershell-7:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parser and fixture tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          & .\tests\F0.Tests.ps1
