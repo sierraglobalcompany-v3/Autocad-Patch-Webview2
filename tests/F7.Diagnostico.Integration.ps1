@@ -21,6 +21,8 @@ try{
         throw 'Full diagnostic did not propagate incomplete journal to PARTIAL'
     }
     Write-Host 'PASS F7 end-to-end: pending journal triggers PARTIAL (exit 2) without firewall mutation.' -ForegroundColor Green
+    # GitHub Actions PowerShell wrapper propagates LASTEXITCODE unless cleared.
+    $global:LASTEXITCODE=0
 }finally{
     if(Test-Path -LiteralPath $fixture -PathType Leaf){Remove-Item -LiteralPath $fixture -Force}
 }
