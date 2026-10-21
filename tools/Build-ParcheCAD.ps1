@@ -19,6 +19,7 @@ $items=@(
     'src/ParcheCAD.Diagnostico.ps1',
     'src/ParcheCAD.Reglas.ps1',
     'src/ParcheCAD.Panel.ps1',
+    'src/ParcheCAD.UIState.ps1',
     'docs/SPEC_MAESTRA.md',
     'docs/F0_GUIA_USO_Y_QA.md',
     'docs/F1F2_IMPLEMENTACION_QA.md',
