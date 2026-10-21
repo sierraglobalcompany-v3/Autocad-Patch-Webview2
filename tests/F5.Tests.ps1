@@ -75,7 +75,7 @@ try {
     $undo=Invoke-PCADRollbackRules -JournalPath $journalPath -Commit
     Assert-F5 ($undo.Status -eq 'PARTIAL_ROLLBACK' -and $undo.Remaining -eq 1) 'interrupted CREATING remains blocked for review'
     $incomplete=Get-PCADRecoveryOverview -JournalDirectory $journalDir
-    Assert-F5 ($incomplete.Status -eq 'OK' -and $incomplete.NeedsReview -eq 1) 'incomplete journal is detected read-only'
+    Assert-F5 ($incomplete.Status -eq 'PARCIAL' -and $incomplete.NeedsReview -eq 1) 'incomplete journal fail-closed'
     $completed=[pscustomobject]@{
         Schema='PCAD4_OPERATION_1';Status='APPLIED';FinishedAt='';
         Operations=@([pscustomobject]@{State='CREATED'})
