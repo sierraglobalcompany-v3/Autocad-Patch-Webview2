@@ -74,14 +74,14 @@ $form.Controls.AddRange(@($header,$sub,$installed,$webview,$rules,$why,$start,$o
 $cancel.Enabled=$false
 $preview.Enabled=$false;$apply.Enabled=$false;$rollback.Enabled=$false
 function PCAD-Busy([bool]$Busy) {
-    $start.Enabled=-not $Busy
-    $open.Enabled=-not $Busy
-    $cancel.Enabled=$Busy -and ($null -eq $script:AdminProc)
+    $script:start.Enabled=-not $Busy
+    $script:open.Enabled=-not $Busy
+    $script:cancel.Enabled=$Busy -and ($null -eq $script:AdminProc)
     $ui=Get-PCADReportUiState -Report $script:LastReport -ExitCode $script:LastExitCode
-    $preview.Enabled=(-not $Busy) -and $ui.CanPreview
-    $apply.Enabled=(-not $Busy) -and ($null -eq $script:AdminProc) -and $ui.CanApply -and
+    $script:preview.Enabled=(-not $Busy) -and $ui.CanPreview
+    $script:apply.Enabled=(-not $Busy) -and ($null -eq $script:AdminProc) -and $ui.CanApply -and
         (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'ParcheCAD.Reglas.ps1') -PathType Leaf)
-    $rollback.Enabled=(-not $Busy) -and (Test-Path -LiteralPath (Join-Path $script:Reports 'operaciones') -PathType Container)
+    $script:rollback.Enabled=(-not $Busy) -and (Test-Path -LiteralPath (Join-Path $script:Reports 'operaciones') -PathType Container)
 }
 function PCAD-ReadLog([string]$File) {
     try {if(Test-Path -LiteralPath $File -PathType Leaf) {return (Get-Content -LiteralPath $File -ErrorAction Stop) -join [Environment]::NewLine}}
@@ -141,9 +141,9 @@ function PCAD-Finish {
     if($network.Count -gt 0 -and $null -ne $network[0]) {
         $lines.Add(('Atribucion F3: {0} WebView2 observados, {1} AutoCAD probable(s), aislamiento NO VERIFICADO' -f $network[0].TotalWebView2,$network[0].ProbableAutoCAD))
     }
-    $preview=@(Get-PCADReportRows -Object $ui.Sections -Name 'PolicyPreview')
-    if($preview.Count -gt 0 -and $null -ne $preview[0]) {
-        $lines.Add(('Vista previa F4: {0} reglas candidatas, {1} conflictos, {2} excluidos; NINGUNA regla aplicada' -f $preview[0].Count,$preview[0].Conflicts,@($preview[0].Excluded).Count))
+    $planRows=@(Get-PCADReportRows -Object $ui.Sections -Name 'PolicyPreview')
+    if($planRows.Count -gt 0 -and $null -ne $planRows[0]) {
+        $lines.Add(('Vista previa F4: {0} reglas candidatas, {1} conflictos, {2} excluidos; NINGUNA regla aplicada' -f $planRows[0].Count,$planRows[0].Conflicts,@($planRows[0].Excluded).Count))
     }
     foreach($c in $ui.Checks){
         $cSection=Get-PCADReportField -Object $c -Name 'Section'
