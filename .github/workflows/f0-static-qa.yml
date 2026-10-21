@@ -1,4 +1,4 @@
-name: ParcheCAD Windows QA (F0-F16)
+name: ParcheCAD Windows QA (F0-F17)
 on:
   pull_request:
   push:
@@ -22,6 +22,7 @@ jobs:
           & .\tests\F12.RCGates.Tests.ps1
           & .\tests\F14.SharedCatalog.Tests.ps1
           & .\tests\F15.ReparseGuard.Tests.ps1
+          & .\tests\F17.Session.Tests.ps1
       - name: Smoke F0 on clean Windows runner (read-only)
         shell: powershell
         timeout-minutes: 6

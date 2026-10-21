@@ -1,9 +1,9 @@
 # PROJECT_CONTINUITY_CURRENT — ParcheCAD 4.0
 
-**Actualizado:** 2026-10-21. **Estado:** F0–F16 desarrolladas en PRs Draft; **SIN RC1 / RELEASE / DEPLOY / MERGE**.  
+**Actualizado:** 2026-10-21. **Estado:** F0–F17 (F17 protocolo LAB read-only, sin prueba AutoCAD) desarrolladas en PRs Draft; **SIN RC1 / RELEASE / DEPLOY / MERGE**.  
 **Repositorio fuente única:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2  
-**Rama vigente:** `fix/f16-firewall-filter-integrity` · **PR #18 Draft**, apilado sobre #17→#16→#15→#14→#13→#12→#11→#10→#9→#8→#7→#6→#5→#4→#3. **`main` aún no tiene estas fases.**  
-**CI de código F16:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39552336715 (primer CI con filtros y prueba de IP restringida). Verificar SIEMPRE el workflow asociado al HEAD final antes de declarar nuevo checkpoint verde. La certificación con AutoCAD real sigue pendiente. No confundir con certificación AutoCAD. Verificar CI sobre último HEAD tras commits de docs.
+**Rama vigente:** `fix/f17-integrated-qa-protocol` · **PR #19 Draft**, apilado sobre #17→#16→#15→#14→#13→#12→#11→#10→#9→#8→#7→#6→#5→#4→#3. **`main` aún no tiene estas fases.**  
+**CI base F16:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39552336715 (primer CI con filtros y prueba de IP restringida). Verificar SIEMPRE el workflow asociado al HEAD final antes de declarar nuevo checkpoint verde. La certificación con AutoCAD real sigue pendiente. No confundir con certificación AutoCAD. Verificar CI sobre último HEAD tras commits de docs.
 
 ## Objetivo del usuario y límites no negociables
 
@@ -103,3 +103,11 @@ Clonar exactamente la **rama F16**, leer `PROJECT_CONTINUITY_CURRENT.md` + `docs
 ## NEXT único
 
 **SIGUIENTE: preparar una única QA final con AutoCAD real:** usar la evidencia F13 para distinguir pruebas sintéticas del producto y preparar un entorno Windows interactivo con AutoCAD autorizado, snapshot de restauración, AVG activo, registro de conexiones, prueba UAC y rollback/reinicio. Solo entonces evaluar la evidencia de las diez puertas; si WebView2 sigue sin solución exclusiva, mantener ese objetivo como BLOCKED y plantear una decisión de alcance explícita, **sin declarar éxito falso**. No pedir tests por módulos al usuario, no merge ni Release hasta decisión basada en evidencias.
+
+
+## F17 — protocolo QA integrada (2026-10-21)
+- Rama `fix/f17-integrated-qa-protocol` apilada sobre F16, sin merge, release ni pruebas con AutoCAD real.
+- `tools/Invoke-ParcheCADF17.ps1`: solo lectura; `Before`, `After` y `Evaluate`, con carpetas distintas y bloqueo de sobrescritura; reutiliza F0 y F12, no aplica firewall ni aprueba RC1.
+- `docs/F17_PROTOCOLO_QA_INTEGRADA.md`: sesión única de laboratorio, evidencia TCP/UDP IPv4/IPv6, servicios, WebView2 compartido, GUI/UAC, AVG y reinicio/rollback.
+- `tests/F17.Session.Tests.ps1`: fixtures de evaluación de 10 puertas y rechazo fail-closed. CI último HEAD de F17: verificar antes de marcar verde.
+- **NEXT:** verificar CI y ejecutar sesión única solo cuando exista VM Windows con AutoCAD legítimo; RC1 sigue BLOCKED.

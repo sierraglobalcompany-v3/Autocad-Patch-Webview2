@@ -2,7 +2,7 @@
 
 Proyecto de control y diagnóstico de conectividad para instalaciones de AutoCAD 2023, 2024, 2025, 2026 y 2027 en Windows.
 
-> **Estado: desarrollo F0–F16 en PRs Draft, con ZIP técnico DEV disponible en GitHub Actions. NO RC1, NO release.** CI Windows PS5.1/7 y firewall temporal verde; **sin release 4.0 ni QA gráfica integral/AutoCAD real**. Las versiones históricas 2.x y 3.x no son releases de este repositorio.
+> **Estado: desarrollo F0–F17 en PRs Draft, con ZIP técnico DEV disponible en GitHub Actions. NO RC1, NO release.** CI Windows PS5.1/7 y firewall temporal verde; **sin release 4.0 ni QA gráfica integral/AutoCAD real**. Las versiones históricas 2.x y 3.x no son releases de este repositorio.
 
 ## Objetivo
 
@@ -58,3 +58,7 @@ Los cambios de código se implementarán en ramas y PRs revisables. No se copiar
 ## Aviso
 
 Herramienta independiente, no afiliada a Autodesk o Microsoft. El comportamiento de conectividad puede afectar funciones o licencias del software; ninguna medición o bloqueo equivale a modificar derechos de uso.
+
+
+## F17 — QA integrada, laboratorio solamente
+La rama F17 incorpora `tools/Invoke-ParcheCADF17.ps1` para capturas de diagnóstico `Before` y `After` separadas y evaluación `Evaluate` usando F12, sin modificaciones al firewall. Documento operativo: `docs/F17_PROTOCOLO_QA_INTEGRADA.md`. Prueba: `tests/F17.Session.Tests.ps1`. La matriz generada siempre deja evidencias externas pendientes y `Decision=BLOCKED`; NO RC1, sin pruebas reales de AutoCAD ni WebView2 exclusivo.
