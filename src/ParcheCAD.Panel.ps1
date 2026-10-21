@@ -352,6 +352,7 @@ if($InteractionSelfTest){
     # The real diagnostic child is read-only; dummy child processes simulate
     # Cancel and administrative-close lifecycle, with zero firewall writes.
     $createdRunRoot=''
+    $unrelated=$null
     $binding=[Reflection.BindingFlags]::Instance -bor [Reflection.BindingFlags]::NonPublic
     function Invoke-PCADClick([Windows.Forms.Button]$Button){
         $onClick=$Button.GetType().GetMethod('OnClick',$binding)
@@ -375,15 +376,20 @@ if($InteractionSelfTest){
         Write-Host ('F9 PASS: Analyze handler -> read-only Windows child -> report -> safe status ({0}).' -f $ui.Result)
 
         Write-Host 'F9: dispatch Cancel handler against an owned dummy sleeping process.'
+        $unrelated=Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList '-NoLogo -NoProfile -Command "Start-Sleep -Seconds 30"' -PassThru -WindowStyle Hidden -ErrorAction Stop
         $script:LastReport=$null;$script:LastExitCode=$null
         $script:Proc=Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList '-NoLogo -NoProfile -Command "Start-Sleep -Seconds 30"' -PassThru -WindowStyle Hidden -ErrorAction Stop
+        $ownedPid=$script:Proc.Id
         PCAD-Busy $true
         if(!$cancel.Enabled -or $apply.Enabled){throw 'F9: cancel disabled while read-only child running'}
         Invoke-PCADClick -Button $cancel
         if($null -ne $script:Proc -or $cancel.Enabled -or $apply.Enabled -or $status.Text -notmatch 'CANCELADO'){
             throw 'F9: cancel handler failed to release owned process and reset controls'
         }
-        Write-Host 'F9 PASS: Cancel handler closed only its owned dummy child.'
+        if(Get-Process -Id $ownedPid -ErrorAction SilentlyContinue){throw 'F10: Cancel claimed success but owned PID is still active'}
+        $unrelated.Refresh()
+        if($unrelated.HasExited){throw 'F10: Cancel unexpectedly terminated unrelated PowerShell'}
+        Write-Host 'F10 PASS: Cancel verified owned PID exit, unrelated PowerShell stays alive.'
 
         Write-Host 'F9: exercise FormClosing handler against a dummy admin placeholder (no UAC).'
         $script:AdminProc=Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList '-NoLogo -NoProfile -Command "Start-Sleep -Seconds 30"' -PassThru -WindowStyle Hidden -ErrorAction Stop
@@ -403,6 +409,17 @@ if($InteractionSelfTest){
         $null=$onFormClosing.Invoke($form,[object[]]@($closing2))
         if($closing2.Cancel){throw 'F9: FormClosing stays blocked after admin placeholder ends'}
         Write-Host 'F9 PASS: FormClosing denied with active admin placeholder, allowed after exit.'
+        # Exercise normal FormClosing against an owned, read-only process as well.
+        $script:Proc=Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList '-NoLogo -NoProfile -Command "Start-Sleep -Seconds 30"' -PassThru -WindowStyle Hidden -ErrorAction Stop
+        $closingPid=$script:Proc.Id
+        PCAD-Busy $true
+        $closingReadOnly=[Windows.Forms.FormClosingEventArgs]::new([Windows.Forms.CloseReason]::UserClosing,$false)
+        $null=$onFormClosing.Invoke($form,[object[]]@($closingReadOnly))
+        if($closingReadOnly.Cancel -or $null -ne $script:Proc){throw 'F10: closing failed to stop its owned read-only process'}
+        if(Get-Process -Id $closingPid -ErrorAction SilentlyContinue){throw 'F10: closing left read-only child running'}
+        $unrelated.Refresh()
+        if($unrelated.HasExited){throw 'F10: closing terminated unrelated PowerShell'}
+        Write-Host 'F10 PASS: FormClosing verified owned child stopped without touching unrelated process.'
         Write-Host 'PASS F9: WinForms event handlers validated headlessly, UAC/visual QA remain pending.' -ForegroundColor Green
         exit 0
     } finally {
@@ -414,6 +431,10 @@ if($InteractionSelfTest){
                 try {$p.Dispose()}catch{}
                 Set-Variable -Name $name -Scope Script -Value $null
             }
+        }
+        if($null -ne $unrelated){
+            try {$unrelated.Refresh();if(!$unrelated.HasExited){$unrelated.Kill();$unrelated.WaitForExit(5000)|Out-Null}}catch{}
+            try {$unrelated.Dispose()}catch{}
         }
         if(!$form.IsDisposed){$form.Dispose()}
         if($createdRunRoot -and (Test-Path -LiteralPath $createdRunRoot -PathType Container)){
