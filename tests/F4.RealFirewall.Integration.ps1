@@ -34,6 +34,7 @@ try {
     }
     $res=Invoke-PCADApplyPlan -Plan $plan -BackupDirectory (Join-Path $testDir 'backups') -Commit
     $manifest=[string]$res.Manifest
+    Write-Host ('F4 Integration: {0}' -f ($res | ConvertTo-Json -Depth 8 -Compress))
     if($res.Status -ne 'APPLIED' -or $res.Created -ne 1){throw 'Fallo en aplicacion real.'}
     $verified=Get-PCADActualRuleStatus -RuleName $ruleName -Program $exe
     if($verified.State -ne 'EXISTS_VALID'){throw 'La regla real creada no se pudo verificar.'}
