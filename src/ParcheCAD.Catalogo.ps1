@@ -52,13 +52,13 @@ function Get-PCADExecutableCatalog {
         if($year -lt 2023 -or $year -gt 2027) {continue}
         $exe=[string]$install.Path
         if(!$exe -or $exe -match '\[USUARIO\]|\[RUTA_RED_OCULTA\]') {
-            [void]$notes.Add("AutoCAD $year: ruta no recuperable desde informe saneado")
+            [void]$notes.Add("AutoCAD ${year}: ruta no recuperable desde informe saneado")
             continue
         }
         try {
             $root=[IO.Path]::GetDirectoryName($exe)
             if(!([IO.Path]::IsPathRooted($exe)) -or !(Test-Path -LiteralPath $exe -PathType Leaf)) {
-                [void]$notes.Add("AutoCAD $year: archivo no disponible");continue
+                [void]$notes.Add("AutoCAD ${year}: archivo no disponible");continue
             }
             $count=0; $stack=New-Object System.Collections.Stack
             $stack.Push([pscustomobject]@{Path=$root;Depth=0})
@@ -92,10 +92,10 @@ function Get-PCADExecutableCatalog {
                 }
             }
             if($count -ge $MaxFilesPerProduct){
-                [void]$notes.Add("AutoCAD $year: limite $MaxFilesPerProduct EXE; catalogo INCOMPLETO")
+                [void]$notes.Add("AutoCAD ${year}: limite $MaxFilesPerProduct EXE; catalogo INCOMPLETO")
             }
         } catch {
-            [void]$notes.Add(("AutoCAD $year: error de acceso {0}; catalogo INCOMPLETO" -f $_.Exception.GetType().Name))
+            [void]$notes.Add(("AutoCAD ${year}: error de acceso {0}; catalogo INCOMPLETO" -f $_.Exception.GetType().Name))
         }
     }
     # Servicios compartidos tienen evidencias propias, no incluirlos en el mismo grupo de AutoCAD.
