@@ -19,6 +19,7 @@ $items=@(
     'src/ParcheCAD.Diagnostico.ps1',
     'src/ParcheCAD.Reglas.ps1',
     'src/ParcheCAD.Panel.ps1',
+    'src/ParcheCAD.UIState.ps1',
     'docs/SPEC_MAESTRA.md',
     'docs/F0_GUIA_USO_Y_QA.md',
     'docs/F1F2_IMPLEMENTACION_QA.md',
@@ -26,7 +27,8 @@ $items=@(
     'docs/F4_INTERFAZ_QA_REAL.md',
     'docs/F5_INTEGRACION_RECUPERACION_QA.md',
     'docs/F6_PAQUETE_PRE_RC.md',
-    'docs/F7_FAILCLOSED_GUI_QA.md'
+    'docs/F7_FAILCLOSED_GUI_QA.md',
+    'docs/F8_UISTATE_QA.md'
 ) | Sort-Object
 foreach($name in $items){
     if($name -notmatch '^[a-zA-Z0-9_/.-]+$' -or $name -match '(?:^|/)\.\.(?:/|$)') {

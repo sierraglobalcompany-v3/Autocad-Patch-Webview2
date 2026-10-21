@@ -6,6 +6,7 @@ Set-StrictMode -Version 2.0
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
+. (Join-Path $PSScriptRoot 'ParcheCAD.UIState.ps1')
 [System.Windows.Forms.Application]::EnableVisualStyles()
 $script:Runner=Join-Path $PSScriptRoot 'ParcheCAD.Diagnostico.ps1'
 $script:Reports=Join-Path (Split-Path -Parent $PSScriptRoot) 'informes'
@@ -15,6 +16,7 @@ $script:LogOut=''
 $script:LogErr=''
 $script:Started=Get-Date
 $script:LastReport=$null
+$script:LastExitCode=$null
 $script:AdminProc=$null
 function PCAD-Label([string]$Text,[int]$X,[int]$Y,[int]$W,[int]$H,[int]$Size=10) {
     $o=New-Object Windows.Forms.Label
@@ -71,30 +73,10 @@ function PCAD-Busy([bool]$Busy) {
     $start.Enabled=-not $Busy
     $open.Enabled=-not $Busy
     $cancel.Enabled=$Busy -and ($null -eq $script:AdminProc)
-    $preview.Enabled=(-not $Busy) -and ($null -ne $script:LastReport)
-    $plans=@()
-    if($null -ne $script:LastReport){$plans=@($script:LastReport.Sections.PolicyPreview | Where-Object {$null -ne $_})}
-    $ready=($plans.Count -gt 0 -and [int]$plans[0].Count -gt 0 -and [int]$plans[0].Conflicts -eq 0)
-    $reportComplete=($null -ne $script:LastReport -and $script:LastReport.Result -eq 'DIAGNOSTICO_COMPLETADO_SIN_CAMBIOS')
-    $checksOK=$false
-    $recoveryOK=$false
-    if($reportComplete) {
-        $checks=@()
-        if($script:LastReport.PSObject.Properties['Checks']){
-            $checks=@($script:LastReport.Checks)
-        }
-        $checksOK=($checks.Count -eq 10 -and @($checks | Where-Object {$_.Status -ne 'OK'}).Count -eq 0)
-        $history=@()
-        if($script:LastReport.PSObject.Properties['Sections'] -and $null -ne $script:LastReport.Sections -and
-           $script:LastReport.Sections.PSObject.Properties['Historico']){
-            $history=@($script:LastReport.Sections.Historico | Where-Object {$null -ne $_})
-        }
-        if($history.Count -eq 1 -and $null -ne $history[0].Recovery) {
-            $rec=$history[0].Recovery
-            $recoveryOK=($rec.Status -in @('OK','SIN_RESPALDOS') -and [int]$rec.NeedsReview -eq 0 -and [int]$rec.Unverified -eq 0)
-        }
-    }
-    $apply.Enabled=(-not $Busy) -and ($null -eq $script:AdminProc) -and $ready -and $checksOK -and $recoveryOK -and (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'ParcheCAD.Reglas.ps1') -PathType Leaf)
+    $ui=Get-PCADReportUiState -Report $script:LastReport -ExitCode $script:LastExitCode
+    $preview.Enabled=(-not $Busy) -and $ui.CanPreview
+    $apply.Enabled=(-not $Busy) -and ($null -eq $script:AdminProc) -and $ui.CanApply -and
+        (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'ParcheCAD.Reglas.ps1') -PathType Leaf)
     $rollback.Enabled=(-not $Busy) -and (Test-Path -LiteralPath (Join-Path $script:Reports 'operaciones') -PathType Container)
 }
 function PCAD-ReadLog([string]$File) {
@@ -108,6 +90,7 @@ function PCAD-Finish {
     if($null -eq $p){return}
     $script:Proc=$null
     $p.Refresh();$code=$p.ExitCode;$p.Dispose()
+    $script:LastExitCode=$code
     PCAD-Busy $false
     $bar.Style='Continuous';$bar.Value=100
     $reports=@(Get-ChildItem -LiteralPath $script:RunRoot -Directory -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending)
@@ -124,35 +107,54 @@ function PCAD-Finish {
         return
     }
     $script:LastReport=$data
-    $inst=@($data.Sections.Installations | Where-Object {$null -ne $_ -and $_.FileFound})
-    $years=@($inst | ForEach-Object {$_.Year} | Sort-Object -Unique)
+    $ui=Get-PCADReportUiState -Report $data -ExitCode $code
+    $inst=@(Get-PCADReportRows -Object $ui.Sections -Name 'Installations' | Where-Object {
+        (Get-PCADReportField -Object $_ -Name 'FileFound') -eq $true
+    })
+    $years=@($inst | ForEach-Object {Get-PCADReportField -Object $_ -Name 'Year'} | Sort-Object -Unique)
     $installed.Text='AutoCAD detectados: '+$(if($years.Count){$years -join ', '}else{'ninguno'})
-    $web=@($data.Sections.Processes | Where-Object {$_.Classification -eq 'WEBVIEW2_COMPARTIDO'})
-    $acadWeb=@($web | Where-Object {$_.Attribution -eq 'AUTOCAD_PROBABLE'})
+    $web=@(Get-PCADReportRows -Object $ui.Sections -Name 'Processes' | Where-Object {
+        (Get-PCADReportField -Object $_ -Name 'Classification') -eq 'WEBVIEW2_COMPARTIDO'
+    })
+    $acadWeb=@($web | Where-Object {(Get-PCADReportField -Object $_ -Name 'Attribution') -eq 'AUTOCAD_PROBABLE'})
     $webview.Text=("WebView2 observado: {0} procesos; atribuibles probablemente a AutoCAD: {1}" -f $web.Count,$acadWeb.Count)
-    $historical=@($data.Sections.Historico)
+    $historical=@(Get-PCADReportRows -Object $ui.Sections -Name 'Historico')
     if($historical.Count -gt 0 -and $null -ne $historical[0]){
         $h=$historical[0]
-        $rules.Text=("Firewall Autodesk: {0}; WebView2 global: {1}; tareas sospechosas: {2}" -f $h.AutoCADAndAutodeskActiveRules,$h.WebView2ActiveRules,$h.SuspectedTasks)
+        $countAutodesk=Get-PCADReportField -Object $h -Name 'AutoCADAndAutodeskActiveRules'
+        $countWebView=Get-PCADReportField -Object $h -Name 'WebView2ActiveRules'
+        $countTasks=Get-PCADReportField -Object $h -Name 'SuspectedTasks'
+        $rules.Text=("Firewall Autodesk: {0}; WebView2 global: {1}; tareas sospechosas: {2}" -f $countAutodesk,$countWebView,$countTasks)
     }
-    $status.Text=$(if($code -eq 0){'DIAGNOSTICO COMPLETO (sin cambios)'}else{'DIAGNOSTICO PARCIAL; revisa errores'})
-    $status.ForeColor=$(if($code -eq 0){[Drawing.Color]::ForestGreen}else{[Drawing.Color]::Firebrick})
-    $progressLabel.Text=("Terminado en {0}s; informe guardado." -f $data.ElapsedSeconds)
+    $status.Text=$ui.Description
+    $status.ForeColor=$(if($ui.Complete){[Drawing.Color]::ForestGreen}else{[Drawing.Color]::Firebrick})
+    $progressLabel.Text=("Terminado en {0}s; informe guardado." -f (Get-PCADReportField -Object $data -Name 'ElapsedSeconds'))
     $lines=New-Object System.Collections.Generic.List[string]
-    $lines.Add(("Resultado: {0}" -f $data.Result))
-    $lines.Add(("Catalogo: {0} ejecutables" -f @($data.Sections.Catalog).Count))
-    $network=@($data.Sections.NetworkOverview)
+    $lines.Add(("Resultado: {0}" -f $ui.Result))
+    $catalogRows=@(Get-PCADReportRows -Object $ui.Sections -Name 'Catalog')
+    $lines.Add(("Catalogo: {0} ejecutables" -f $catalogRows.Count))
+    $network=@(Get-PCADReportRows -Object $ui.Sections -Name 'NetworkOverview')
     if($network.Count -gt 0 -and $null -ne $network[0]) {
         $lines.Add(('Atribucion F3: {0} WebView2 observados, {1} AutoCAD probable(s), aislamiento NO VERIFICADO' -f $network[0].TotalWebView2,$network[0].ProbableAutoCAD))
     }
-    $preview=@($data.Sections.PolicyPreview)
+    $preview=@(Get-PCADReportRows -Object $ui.Sections -Name 'PolicyPreview')
     if($preview.Count -gt 0 -and $null -ne $preview[0]) {
         $lines.Add(('Vista previa F4: {0} reglas candidatas, {1} conflictos, {2} excluidos; NINGUNA regla aplicada' -f $preview[0].Count,$preview[0].Conflicts,@($preview[0].Excluded).Count))
     }
-    foreach($c in @($data.Checks)){$lines.Add(("{0}: {1} ({2}) {3}" -f $c.Section,$c.Status,$c.Count,$c.Detail))}
-    if($historical.Count -gt 0 -and $null -ne $historical[0] -and $null -ne $historical[0].Recovery){
-        $rec=$historical[0].Recovery
-        $lines.Add(('Recuperacion: {0} reglas registradas activas (NO VERIFICADAS), {1} operaciones por revisar, {2} respaldos invalidos / lectura {3}' -f $rec.ActiveRules,$rec.NeedsReview,$rec.Unverified,$rec.Status))
+    foreach($c in $ui.Checks){
+        $cSection=Get-PCADReportField -Object $c -Name 'Section'
+        $cStatus=Get-PCADReportField -Object $c -Name 'Status'
+        $cCount=Get-PCADReportField -Object $c -Name 'Count'
+        $cDetail=Get-PCADReportField -Object $c -Name 'Detail'
+        $lines.Add(("{0}: {1} ({2}) {3}" -f $cSection,$cStatus,$cCount,$cDetail))
+    }
+    if($null -ne $ui.Recovery){
+        $rec=$ui.Recovery
+        $active=Get-PCADReportField -Object $rec -Name 'ActiveRules'
+        $review=Get-PCADReportField -Object $rec -Name 'NeedsReview'
+        $invalid=Get-PCADReportField -Object $rec -Name 'Unverified'
+        $recStatus=Get-PCADReportField -Object $rec -Name 'Status'
+        $lines.Add(("Recuperacion: {0} reglas registradas (NO VERIFICADAS), {1} operaciones por revisar, {2} respaldos invalidos / lectura {3}" -f $active,$review,$invalid,$recStatus))
     }
     $lines.Add('WebView2 de AutoCAD aislado: NO VERIFICADO.')
     $lines.Add(("Informe: {0}" -f $file))
@@ -188,6 +190,7 @@ $timer.Add_Tick({
 function PCAD-Begin {
     if($null -ne $script:Proc -or $null -ne $script:AdminProc){return}
     $script:LastReport=$null
+    $script:LastExitCode=$null
     try{
         if(!(Test-Path -LiteralPath $script:Runner -PathType Leaf)){throw 'Falta el modulo de diagnostico.'}
         if(!(Test-Path -LiteralPath $script:Reports -PathType Container)){
@@ -230,24 +233,21 @@ function PCAD-LaunchAdmin([string]$Mode,[string]$Manifest=''){
     }
 }
 $preview.Add_Click({
-    if($null -eq $script:LastReport){return}
-    $p=@($script:LastReport.Sections.PolicyPreview)
-    if($p.Count -lt 1 -or $null -eq $p[0]){return}
+    $ui=Get-PCADReportUiState -Report $script:LastReport -ExitCode $script:LastExitCode
+    if(!$ui.CanPreview){return}
+    $p=$ui.Plan
     $nl=[Environment]::NewLine
-    $msg=('Candidatas: {0} / conflictos: {1} / excluidos: {2}' -f $p[0].Count,$p[0].Conflicts,@($p[0].Excluded).Count)+$nl+'WebView2 compartido excluido; tambien puede afectar LAN.'
+    $candidate=Get-PCADReportField -Object $p -Name 'Count'
+    $conflicts=Get-PCADReportField -Object $p -Name 'Conflicts'
+    $excluded=@(Get-PCADReportRows -Object $p -Name 'Excluded')
+    $msg=('Candidatas: {0} / conflictos: {1} / excluidos: {2}' -f $candidate,$conflicts,$excluded.Count)+$nl+'WebView2 compartido excluido; tambien puede afectar LAN.'
     [void][Windows.Forms.MessageBox]::Show($msg,'Vista previa F4')
 })
 $apply.Add_Click({
-    if($null -eq $script:LastReport -or $script:LastReport.Result -ne 'DIAGNOSTICO_COMPLETADO_SIN_CAMBIOS'){return}
-    $p=@($script:LastReport.Sections.PolicyPreview)
-    if($p.Count -ne 1 -or [int]$p[0].Count -le 0 -or [int]$p[0].Conflicts -gt 0){return}
-    if(@($script:LastReport.Checks).Count -ne 10 -or
-       @($script:LastReport.Checks|Where-Object {$_.Status -ne 'OK'}).Count -gt 0){return}
-    $history=@($script:LastReport.Sections.Historico | Where-Object {$null -ne $_})
-    if($history.Count -ne 1 -or $null -eq $history[0].Recovery -or
-       $history[0].Recovery.Status -notin @('OK','SIN_RESPALDOS') -or
-       [int]$history[0].Recovery.NeedsReview -gt 0 -or [int]$history[0].Recovery.Unverified -gt 0){return}
-    $q=('Crear hasta {0} reglas salientes para AutoCAD 2023-2027? Puede afectar LAN y funciones/licencias. NO controla WebView2 compartido. Pedira administrador y confirmacion adicional.' -f $p[0].Count)
+    $ui=Get-PCADReportUiState -Report $script:LastReport -ExitCode $script:LastExitCode
+    if($null -ne $script:Proc -or $null -ne $script:AdminProc -or !$ui.CanApply){return}
+    $q=('Crear hasta {0} reglas salientes para AutoCAD 2023-2027? Puede afectar LAN y funciones/licencias. NO controla WebView2 compartido. Pedira administrador y confirmacion adicional.' -f
+        (Get-PCADReportField -Object $ui.Plan -Name 'Count'))
     if([Windows.Forms.MessageBox]::Show($q,'Confirmar bloqueo','YesNo','Warning') -eq 'Yes'){PCAD-LaunchAdmin -Mode 'Apply'}
 })
 $rollback.Add_Click({
@@ -296,23 +296,36 @@ $form.Add_Shown({PCAD-Begin})
 if($SelfTest){
     if(!$form.Controls.Contains($preview) -or !$form.Controls.Contains($apply) -or
        !$form.Controls.Contains($rollback) -or $apply.Enabled -or $rollback.Enabled){throw 'GUI selftest: controls missing or dangerous startup state'}
+    $script:LastExitCode=0
     $script:LastReport=[pscustomobject]@{
-        Result='PARCIAL_NO_VERIFICADO'
-        Sections=[pscustomobject]@{PolicyPreview=@([pscustomobject]@{Count=2;Conflicts=0})}
+        Tool='ParcheCAD';SchemaVersion=1;ReadOnly=$true;Result='PARCIAL_NO_VERIFICADO'
+        Sections=[pscustomobject]@{
+            PolicyPreview=@([pscustomobject]@{Count=2;Conflicts=0;State='PLAN_NO_APLICADO'})
+        }
     }
     PCAD-Busy $false
     if($apply.Enabled){throw 'GUI selftest: partial diagnostics allowed apply'}
     $script:LastReport.Result='DIAGNOSTICO_COMPLETADO_SIN_CAMBIOS'
     PCAD-Busy $false
     if($apply.Enabled){throw 'GUI selftest: missing recovery evidence allowed apply'}
-    $script:LastReport | Add-Member -NotePropertyName Checks -NotePropertyValue @((1..10)|ForEach-Object{[pscustomobject]@{Status='OK'}})
-    $script:LastReport.Sections | Add-Member -NotePropertyName Historico -NotePropertyValue @([pscustomobject]@{Recovery=[pscustomobject]@{Status='PARCIAL';NeedsReview=1;Unverified=0}})
+    $stages=@('Installations','Processes','Services','Catalog','Firewall','Tasks',
+              'Historico','Connections','NetworkOverview','PolicyPreview')
+    $script:LastReport | Add-Member -NotePropertyName Checks -NotePropertyValue @($stages|ForEach-Object{
+        [pscustomobject]@{Section=$_;Status='OK'}
+    })
+    $script:LastReport.Sections | Add-Member -NotePropertyName Historico -NotePropertyValue @(
+        [pscustomobject]@{Recovery=[pscustomobject]@{Status='PARCIAL';NeedsReview=1;Unverified=0}}
+    )
     PCAD-Busy $false
     if($apply.Enabled){throw 'GUI selftest: incomplete recovery allowed apply'}
     $script:LastReport.Sections.Historico[0].Recovery.Status='OK'
     $script:LastReport.Sections.Historico[0].Recovery.NeedsReview=0
     PCAD-Busy $false
     if(!$apply.Enabled){throw 'GUI selftest: valid preview did not enable apply'}
+    $script:LastExitCode=2
+    PCAD-Busy $false
+    if($apply.Enabled){throw 'GUI selftest: nonzero child exit allowed apply'}
+    $script:LastExitCode=0
     PCAD-Busy $true
     if($apply.Enabled -or $rollback.Enabled){throw 'GUI selftest: modifications allowed while busy'}
     Write-Host 'PASS GUI: form initialized, partial diagnostics blocked, valid preview gated and busy state protected.'
