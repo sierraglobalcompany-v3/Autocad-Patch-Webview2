@@ -30,7 +30,16 @@ function Get-PCADRuleName {
 function Get-PCADActualRuleStatus {
     [CmdletBinding()]
     param([string]$RuleName,[string]$Program)
-    $rule=Get-NetFirewallRule -Name $RuleName -PolicyStore PersistentStore -ErrorAction SilentlyContinue
+    $rule=$null
+    try {
+        $rule=Get-NetFirewallRule -Name $RuleName -PolicyStore PersistentStore -ErrorAction Stop
+    } catch {
+        if($_.CategoryInfo.Category -eq [Management.Automation.ErrorCategory]::ObjectNotFound -or
+           $_.FullyQualifiedErrorId -match 'ObjectNotFound|NoMatching|NotFound') {
+            return [pscustomobject]@{State='MISSING';Description='No existe regla local con ese Name'}
+        }
+        throw
+    }
     if($null -eq $rule) {return [pscustomobject]@{State='MISSING';Description='No existe regla local con ese Name'}}
     $matches=@($rule)
     if($matches.Count -ne 1) {
