@@ -107,6 +107,14 @@ function PCAD-Finish {
     $lines=New-Object System.Collections.Generic.List[string]
     $lines.Add(("Resultado: {0}" -f $data.Result))
     $lines.Add(("Catalogo: {0} ejecutables" -f @($data.Sections.Catalog).Count))
+    $network=@($data.Sections.NetworkOverview)
+    if($network.Count -gt 0 -and $null -ne $network[0]) {
+        $lines.Add(('Atribucion F3: {0} WebView2 observados, {1} AutoCAD probable(s), aislamiento NO VERIFICADO' -f $network[0].TotalWebView2,$network[0].ProbableAutoCAD))
+    }
+    $preview=@($data.Sections.PolicyPreview)
+    if($preview.Count -gt 0 -and $null -ne $preview[0]) {
+        $lines.Add(('Vista previa F4: {0} reglas candidatas, {1} conflictos, {2} excluidos; NINGUNA regla aplicada' -f $preview[0].Count,$preview[0].Conflicts,@($preview[0].Excluded).Count))
+    }
     foreach($c in @($data.Checks)){$lines.Add(("{0}: {1} ({2}) {3}" -f $c.Section,$c.Status,$c.Count,$c.Detail))}
     $lines.Add('WebView2 de AutoCAD aislado: NO VERIFICADO.')
     $lines.Add(("Informe: {0}" -f $file))
