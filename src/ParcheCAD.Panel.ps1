@@ -12,6 +12,8 @@ $script:RunRoot=''
 $script:LogOut=''
 $script:LogErr=''
 $script:Started=Get-Date
+$script:LastReport=$null
+$script:AdminProc=$null
 function PCAD-Label([string]$Text,[int]$X,[int]$Y,[int]$W,[int]$H,[int]$Size=10) {
     $o=New-Object Windows.Forms.Label
     $o.Text=$Text;$o.Location=New-Object Drawing.Point($X,$Y)
@@ -27,8 +29,8 @@ function PCAD-Button([string]$Text,[int]$X,[int]$Y,[int]$W) {
 }
 $form=New-Object Windows.Forms.Form
 $form.Text='ParcheCAD 4.0 | Diagnostico AutoCAD 2023-2027'
-$form.ClientSize=New-Object Drawing.Size(945,660)
-$form.MinimumSize=New-Object Drawing.Size(955,700)
+$form.ClientSize=New-Object Drawing.Size(945,715)
+$form.MinimumSize=New-Object Drawing.Size(955,755)
 $form.FormBorderStyle='FixedSingle';$form.MaximizeBox=$false
 $form.StartPosition='CenterScreen';$form.BackColor=[Drawing.Color]::White
 $form.Font=New-Object Drawing.Font('Segoe UI',10)
@@ -44,25 +46,34 @@ $start=PCAD-Button 'ANALIZAR SISTEMA' 20 275 345
 $open=PCAD-Button 'ABRIR INFORMES' 378 275 250
 $cancel=PCAD-Button 'CANCELAR' 642 275 135
 $exit=PCAD-Button 'SALIR' 790 275 135
-$progressLabel=PCAD-Label 'Listo para iniciar' 20 337 905 30
+$preview=PCAD-Button 'VISTA PREVIA DE BLOQUEOS' 20 334 295
+$apply=PCAD-Button 'APLICAR CON CONFIRMACION' 328 334 300
+$rollback=PCAD-Button 'REVERTIR OPERACION PROPIA' 642 334 283
+$progressLabel=PCAD-Label 'Listo para iniciar' 20 399 905 30
 $bar=New-Object Windows.Forms.ProgressBar
-$bar.Location=New-Object Drawing.Point(20,369);$bar.Size=New-Object Drawing.Size(905,19)
+$bar.Location=New-Object Drawing.Point(20,432);$bar.Size=New-Object Drawing.Size(905,19)
 $bar.Minimum=0;$bar.Maximum=100
-$status=PCAD-Label 'Estado: pendiente de diagnostico' 20 400 905 30 11
+$status=PCAD-Label 'Estado: pendiente de diagnostico' 20 464 905 30 11
 $details=New-Object Windows.Forms.TextBox
-$details.Location=New-Object Drawing.Point(20,438);$details.Size=New-Object Drawing.Size(905,168)
+$details.Location=New-Object Drawing.Point(20,500);$details.Size=New-Object Drawing.Size(905,158)
 $details.Multiline=$true;$details.ScrollBars='Both'
 $details.ReadOnly=$true;$details.WordWrap=$false
 $details.Font=New-Object Drawing.Font('Consolas',9)
 $details.Text='ParcheCAD 4.0: inventario por version, reglas y procesos WebView2.'
-$foot=PCAD-Label 'La gestion reversible del firewall se incorporara despues del QA del motor de reglas.' 20 619 905 28 9
+$foot=PCAD-Label 'Los cambios requieren administrador y confirmacion escrita; se guardan respaldos locales.' 20 670 905 28 9
 $foot.ForeColor=[Drawing.Color]::DimGray
-$form.Controls.AddRange(@($header,$sub,$installed,$webview,$rules,$why,$start,$open,$cancel,$exit,$progressLabel,$bar,$status,$details,$foot))
+$form.Controls.AddRange(@($header,$sub,$installed,$webview,$rules,$why,$start,$open,$cancel,$exit,$preview,$apply,$rollback,$progressLabel,$bar,$status,$details,$foot))
 $cancel.Enabled=$false
+$preview.Enabled=$false;$apply.Enabled=$false;$rollback.Enabled=$false
 function PCAD-Busy([bool]$Busy) {
     $start.Enabled=-not $Busy
     $open.Enabled=-not $Busy
-    $cancel.Enabled=$Busy
+    $cancel.Enabled=$Busy -and ($null -eq $script:AdminProc)
+    $preview.Enabled=(-not $Busy) -and ($null -ne $script:LastReport)
+    $plans=@($script:LastReport.Sections.PolicyPreview | Where-Object {$null -ne $_})
+    $ready=($plans.Count -gt 0 -and [int]$plans[0].Count -gt 0 -and [int]$plans[0].Conflicts -eq 0)
+    $apply.Enabled=(-not $Busy) -and $ready -and (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'ParcheCAD.Reglas.ps1') -PathType Leaf)
+    $rollback.Enabled=(-not $Busy) -and (Test-Path -LiteralPath (Join-Path $script:Reports 'operaciones') -PathType Container)
 }
 function PCAD-ReadLog([string]$File) {
     try {if(Test-Path -LiteralPath $File -PathType Leaf) {return (Get-Content -LiteralPath $File -ErrorAction Stop) -join [Environment]::NewLine}}
@@ -90,6 +101,7 @@ function PCAD-Finish {
         if(!$details.Text){$details.Text=PCAD-ReadLog $script:LogOut}
         return
     }
+    $script:LastReport=$data
     $inst=@($data.Sections.Installations | Where-Object {$null -ne $_ -and $_.FileFound})
     $years=@($inst | ForEach-Object {$_.Year} | Sort-Object -Unique)
     $installed.Text='AutoCAD detectados: '+$(if($years.Count){$years -join ', '}else{'ninguno'})
@@ -119,10 +131,22 @@ function PCAD-Finish {
     $lines.Add('WebView2 de AutoCAD aislado: NO VERIFICADO.')
     $lines.Add(("Informe: {0}" -f $file))
     $details.Text=$lines -join [Environment]::NewLine
+    PCAD-Busy $false
 }
 $timer=New-Object Windows.Forms.Timer
 $timer.Interval=400
 $timer.Add_Tick({
+    if($null -ne $script:AdminProc){
+        $script:AdminProc.Refresh()
+        if($script:AdminProc.HasExited){
+            $code=$script:AdminProc.ExitCode
+            $script:AdminProc.Dispose();$script:AdminProc=$null
+            PCAD-Busy $false
+            $status.Text=('Operacion administrativa finalizada (codigo '+$code+'). Reconsultando...')
+            PCAD-Begin
+        } else {$progressLabel.Text='Operacion administrativa en consola elevada: esperando confirmacion/resultado...'}
+        return
+    }
     if($null -eq $script:Proc){return}
     $elapsed=[int]((Get-Date)-$script:Started).TotalSeconds
     $log=PCAD-ReadLog $script:LogOut
@@ -136,7 +160,8 @@ $timer.Add_Tick({
     if($script:Proc.HasExited){PCAD-Finish}
 })
 function PCAD-Begin {
-    if($null -ne $script:Proc){return}
+    if($null -ne $script:Proc -or $null -ne $script:AdminProc){return}
+    $script:LastReport=$null
     try{
         if(!(Test-Path -LiteralPath $script:Runner -PathType Leaf)){throw 'Falta el modulo de diagnostico.'}
         if(!(Test-Path -LiteralPath $script:Reports -PathType Container)){
