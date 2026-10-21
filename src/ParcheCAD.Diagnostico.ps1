@@ -8,9 +8,12 @@ $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot 'ParcheCAD.Historico.ps1')
 . (Join-Path $PSScriptRoot 'ParcheCAD.Network.ps1')
 . (Join-Path $PSScriptRoot 'ParcheCAD.Policy.ps1')
+. (Join-Path $PSScriptRoot 'ParcheCAD.Evidence.ps1')
 
 $started=Get-Date
 $sections=[ordered]@{}
+$privateInstallations=@()
+$privateCatalog=@()
 $checks=New-Object System.Collections.ArrayList
 $stages=@(
     @{Key='Installations';Label='AutoCAD 2023-2027'},
@@ -34,12 +37,17 @@ foreach ($stage in $stages) {
         $result=@()
         $stageStatus='OK';$stageDetail=''
         switch ($key) {
-            Installations {$result=@(Get-PCADInstallations);break}
+            Installations {
+                $privateInstallations=@(Get-PCADInstallations -InternalPaths)
+                $result=@($privateInstallations | ForEach-Object {ConvertTo-PCADSafeRecord -Record $_ -PathFields @('Path')})
+                break
+            }
             Processes {$result=@(Get-PCADProcesses);break}
             Services {$result=@(Get-PCADServices);break}
             Catalog {
-                $catalog=Get-PCADExecutableCatalog -Installations @($sections['Installations']) -Services @($sections['Services'])
-                $result=@($catalog.Entries)
+                $catalog=Get-PCADExecutableCatalog -Installations $privateInstallations -Services @($sections['Services']) -InternalPaths
+                $privateCatalog=@($catalog.Entries)
+                $result=@($privateCatalog | ForEach-Object {ConvertTo-PCADSafeRecord -Record $_ -PathFields @('Path','InstallationRoot')})
                 $sections['CatalogWarnings']=@($catalog.Warnings)
                 if($catalog.Status -ne 'OK'){$stageStatus='PARCIAL';$stageDetail='Catalogo limitado; ver CatalogWarnings'}
                 break
@@ -49,7 +57,11 @@ foreach ($stage in $stages) {
             Historico {$result=@(Get-PCADLegacyOverview -Firewall @($sections['Firewall']) -Tasks @($sections['Tasks']));break}
             Connections {$result=@(Get-PCADConnections -Processes @($sections['Processes']));break}
             NetworkOverview {$result=@(Get-PCADNetworkOverview -Processes @($sections['Processes']) -Connections @($sections['Connections']));break}
-            PolicyPreview {$result=@(New-PCADRulePlan -Catalog @($sections['Catalog']) -CheckExisting);break}
+            PolicyPreview {
+                $internalPlan=New-PCADRulePlan -Catalog $privateCatalog -CheckExisting
+                $result=@(ConvertTo-PCADSafePlan -Plan $internalPlan)
+                break
+            }
         }
         $sections[$key]=@($result)
         [void]$checks.Add([pscustomobject]@{
