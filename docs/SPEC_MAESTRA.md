@@ -1,5 +1,5 @@
 # SPEC MAESTRA — ParcheCAD 4.0
-**Estado:** F0–F13 en desarrollo con QA Windows y ZIP DEV reproducible, no RC ni release · **Repositorio:** sierraglobalcompany-v3/Autocad-Patch-Webview2 · **Fecha:** 2026-10-20
+**Estado:** F0–F14 en desarrollo con QA Windows y ZIP DEV reproducible, no RC ni release · **Repositorio:** sierraglobalcompany-v3/Autocad-Patch-Webview2 · **Fecha:** 2026-10-20
 
 ## Objetivo y definiciones de éxito
 Inventariar AutoCAD 2023–2027, sus ejecutables y servicios, procesos WebView2, reglas de firewall y conexiones. Evaluar aislamiento de conexiones de Autodesk, aceptando pérdida de funciones en línea, sin afectar WebView2 de WhatsApp/Outlook.
@@ -130,5 +130,15 @@ Nunca deshabilitar AVG/Defender, añadir exclusiones, evadir alertas, eliminar l
 - Reutiliza el motor F4, valida línea base, identidad de reglas y limpieza propia `finally`; no crea módulos ni servicios residentes ni modifica AutoCAD, WebView2 Microsoft, licencias o antivirus.
 - Es evidencia efectiva de **una regla Outbound por ruta aplicada a un EXE de prueba**. No implica cobertura de AutoCAD instalado, Autodesk compartido, UDP, IPv6, LAN ni WebView2 exclusivo. `Get-PCADRC12Assessment` sigue BLOCKED.
 - Evidencia: `docs/F13_PRUEBA_EGRESO_TCP_REAL.md` y pipeline GitHub Actions. No confundir configuración de reglas, prueba sintética y certificación de aplicación real.
+
+## F14 — alcance de ejecutables Autodesk compartidos
+
+- `Get-PCADExecutableCatalog` reutiliza un **único recorrido acotado** para raíces AutoCAD confirmadas y carpetas conocidas de programas Autodesk compartidos (AdODIS, Access, Autodesk Desktop App, Identity Services y Common Files/Autodesk Shared).
+- Raíces por defecto basadas en `ProgramFiles`/Common Files; no recorrer todo C:, perfiles personales ni rutas UNC. Sin traversal de junctions/symlinks.
+- Límite de 900 archivos y profundidad 7 por AutoCAD; 250 y profundidad 5 por raíz compartida. El código marca truncamiento en profundidad, cantidad y errores de acceso.
+- `Status` del producto controla la capacidad de declarar completo el diagnóstico; `SharedStatus` advierte si el inventario compartido es parcial **sin bloquear un Apply a EXE de producto que esté bien verificado**.
+- Todos los EXE descubiertos en raíces compartidas permanecen `AUTODESK_COMPARTIDO`, `Policy=SOLO_INVENTARIO`, excluidos de reglas automáticas; WebView2 `msedgewebview2.exe` continúa excluido.
+- `Sections.CatalogScope` expone estados de ambas exploraciones y `SharedAutomaticBlocking=false`; WinForms informa el estado. La existencia en carpeta no demuestra firma, proveedor ni uso exclusivo.
+- Fixtures `tests/F14.SharedCatalog.Tests.ps1` PS5.1/7 y test headless del diagnóstico/UI; evidencia `docs/F14_INVENTARIO_COMPARTIDO_QA.md`.
 
 **NEXT: una única QA integrada de aceptación en Windows con escritorio auténticamente interactivo, AutoCAD instalado, AVG habilitado, trazas de red y reinicio; si no existe entorno/evidencia, RC1 sigue BLOCKED. PRs Draft, no merge ni release.**
