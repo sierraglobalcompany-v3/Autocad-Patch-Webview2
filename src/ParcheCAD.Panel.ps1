@@ -189,113 +189,53 @@ function PCAD-Begin {
         [void][Windows.Forms.MessageBox]::Show($_.Exception.Message,'ParcheCAD','OK','Error')
     }
 }
-function PCAD-LaunchAdmin([string]$Mode,[string]$Manifest='') {
+function PCAD-LaunchAdmin([string]$Mode,[string]$Manifest=''){
     if($null -ne $script:Proc -or $null -ne $script:AdminProc){return}
     $engine=Join-Path $PSScriptRoot 'ParcheCAD.Reglas.ps1'
-    if(!(Test-Path -LiteralPath $engine -PathType Leaf)){
-        [void][Windows.Forms.MessageBox]::Show('No existe motor de reglas. Descarga el paquete completo.','ParcheCAD')
-        return
-    }
-    try {
+    if(!(Test-Path -LiteralPath $engine -PathType Leaf)){[void][Windows.Forms.MessageBox]::Show('Falta motor de reglas.','ParcheCAD');return}
+    try{
         $args='-NoLogo -NoProfile -ExecutionPolicy RemoteSigned -File "{0}" -Mode {1} -ConfirmChange' -f $engine,$Mode
-        if($Mode -eq 'Rollback') {$args+=' -Manifest "'+$Manifest+'"'}
+        if($Mode -eq 'Rollback'){$args+=' -Manifest "'+$Manifest+'"'}
         $script:AdminProc=Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList $args -Verb RunAs -PassThru -ErrorAction Stop
-        PCAD-Busy $true
-        $cancel.Enabled=$false
-        $status.Text='OPERACION ADMINISTRATIVA: pendiente del resultado de la consola elevada.'
-        $progressLabel.Text='Confirma o cancela en la consola elevada; espera hasta finalizar.'
+        PCAD-Busy $true;$cancel.Enabled=$false
+        $status.Text='OPERACION ELEVADA: esperando confirmacion en consola.'
+        $progressLabel.Text='Confirma o cancela en consola y espera a que termine.'
         $timer.Start()
-    } catch {
-        $script:AdminProc=$null
-        PCAD-Busy $false
-        $status.Text='No se inicio la operacion administrativa.'
-        [void][Windows.Forms.MessageBox]::Show($_.Exception.Message,'Operacion cancelada/no autorizada')
+    }catch{
+        $script:AdminProc=$null;PCAD-Busy $false
+        [void][Windows.Forms.MessageBox]::Show($_.Exception.Message,'No se inicio la operacion')
     }
 }
 $preview.Add_Click({
     if($null -eq $script:LastReport){return}
     $p=@($script:LastReport.Sections.PolicyPreview)
-    if($p.Count -eq 0 -or $null -eq $p[0]){return}
+    if($p.Count -lt 1 -or $null -eq $p[0]){return}
     $nl=[Environment]::NewLine
-    $message=("Plan F4 (solo lectura):"+$nl+"Candidatos: {0}"+$nl+"Conflictos: {1}"+$nl+"Excluidos: {2}"+$nl+$nl+"WebView2 compartido no incluido. Tambien afecta LAN. No se crea ninguna regla." -f $p[0].Count,$p[0].Conflicts,@($p[0].Excluded).Count)
-    [void][Windows.Forms.MessageBox]::Show($message,'Vista previa de bloqueos','OK','Information')
+    $msg=('Candidatas: {0} / conflictos: {1} / excluidos: {2}' -f $p[0].Count,$p[0].Conflicts,@($p[0].Excluded).Count)+$nl+'WebView2 compartido excluido; tambien puede afectar LAN.'
+    [void][Windows.Forms.MessageBox]::Show($msg,'Vista previa F4')
 })
 $apply.Add_Click({
-    if($null -eq $script:LastReport -or $script:LastReport.Result -ne 'DIAGNOSTICO_COMPLETADO_SIN_CAMBIOS') {
-        [void][Windows.Forms.MessageBox]::Show('Realiza un diagnostico completo antes de aplicar reglas.','ParcheCAD')
-        return
-    }
+    if($null -eq $script:LastReport -or $script:LastReport.Result -ne 'DIAGNOSTICO_COMPLETADO_SIN_CAMBIOS'){return}
     $p=@($script:LastReport.Sections.PolicyPreview)
     if($p.Count -ne 1 -or [int]$p[0].Count -le 0 -or [int]$p[0].Conflicts -gt 0){return}
-    $checks=@($script:LastReport.Checks|Where-Object {$_.Status -ne 'OK'})
-    if($checks.Count -gt 0){[void][Windows.Forms.MessageBox]::Show('Diagnostico parcial: no se aplica.','ParcheCAD');return}
-    $prompt=("Se propondran {0} reglas de salida para EXE AutoCAD 2023-2027. Puede afectar LAN, licencias y funciones online. NO incluye WebView2 compartido ni servicios Autodesk. Debes confirmar otra vez en consola elevada. Continuar?" -f $p[0].Count)
-    if([Windows.Forms.MessageBox]::Show($prompt,'Aplicar reglas de AutoCAD','YesNo','Warning') -ne 'Yes'){return}
-    PCAD-LaunchAdmin -Mode 'Apply'
+    if(@($script:LastReport.Checks|Where-Object {$_.Status -ne 'OK'}).Count -gt 0){return}
+    $q=('Crear hasta {0} reglas salientes para AutoCAD 2023-2027? Puede afectar LAN y funciones/licencias. NO controla WebView2 compartido. Pedira administrador y confirmacion adicional.' -f $p[0].Count)
+    if([Windows.Forms.MessageBox]::Show($q,'Confirmar bloqueo','YesNo','Warning') -eq 'Yes'){PCAD-LaunchAdmin -Mode 'Apply'}
 })
 $rollback.Add_Click({
     $folder=Join-Path $script:Reports 'operaciones'
     if(!(Test-Path -LiteralPath $folder -PathType Container)){return}
     $dlg=New-Object Windows.Forms.OpenFileDialog
-    $dlg.Title='Selecciona un respaldo propio de ParcheCAD para revertir'
-    $dlg.Filter='Operaciones de ParcheCAD (PCAD4_*.json)|PCAD4_*.json'
-    $dlg.InitialDirectory=$folder
-    $dlg.Multiselect=$false
+    $dlg.InitialDirectory=$folder;$dlg.Filter='Manifiestos ParcheCAD|PCAD4_*.json'
     if($dlg.ShowDialog() -ne [Windows.Forms.DialogResult]::OK){$dlg.Dispose();return}
-    $selected=$dlg.FileName;$dlg.Dispose()
-    $resolved=[IO.Path]::GetFullPath($selected)
-    if([IO.Path]::GetDirectoryName($resolved) -ine [IO.Path]::GetFullPath($folder) -or
-        [IO.Path]::GetFileName($resolved) -notmatch '^PCAD4_[0-9a-f]{32}\.json
-$open.Add_Click({
-    if(Test-Path -LiteralPath $script:Reports -PathType Container){
-        Start-Process -FilePath explorer.exe -ArgumentList ('"'+$script:Reports+'"')
-    }else{[void][Windows.Forms.MessageBox]::Show('Todavia no existen informes.','ParcheCAD')}
-})
-$cancel.Add_Click({
-    if($null -eq $script:Proc){return}
-    if([Windows.Forms.MessageBox]::Show('Cancelar consulta? No se modifica Windows.','ParcheCAD','YesNo','Question') -ne 'Yes'){return}
-    $timer.Stop()
-    try{$script:Proc.Refresh();if(!$script:Proc.HasExited){$script:Proc.Kill()}}catch{}
-    try{$script:Proc.Dispose()}catch{}
-    $script:Proc=$null
-    PCAD-Busy $false
-    $bar.Style='Continuous';$bar.Value=0
-    $status.Text='CANCELADO. No se modifico el firewall.'
-})
-$exit.Add_Click({$form.Close()})
-$form.Add_FormClosing({
-    param($sender,$eventArgs)
-    if($null -ne $script:AdminProc){
-        $script:AdminProc.Refresh()
-        if(!$script:AdminProc.HasExited){
-            $eventArgs.Cancel=$true
-            [void][Windows.Forms.MessageBox]::Show('Espera a que termine la operacion elevada antes de cerrar el panel.','ParcheCAD')
-            return
-        }
+    $file=[IO.Path]::GetFullPath($dlg.FileName);$dlg.Dispose()
+    if([IO.Path]::GetDirectoryName($file) -ine [IO.Path]::GetFullPath($folder) -or
+       [IO.Path]::GetFileName($file) -notmatch '^PCAD4_[a-f0-9]{32}\.json$'){
+        [void][Windows.Forms.MessageBox]::Show('Selecciona un manifiesto de esta instalacion.','ParcheCAD');return
     }
-    $timer.Stop()
-    if($null -ne $script:Proc){
-        try{$script:Proc.Refresh();if(!$script:Proc.HasExited){$script:Proc.Kill()}}catch{}
-        try{$script:Proc.Dispose()}catch{}
+    if([Windows.Forms.MessageBox]::Show('Revertir solo reglas nuevas registradas en esta operacion?','Revertir','YesNo','Warning') -eq 'Yes'){
+        PCAD-LaunchAdmin -Mode 'Rollback' -Manifest $file
     }
-})
-$form.Add_Shown({PCAD-Begin})
-if($SelfTest) {
-    if(!$form.Controls.Contains($preview) -or !$form.Controls.Contains($apply) -or
-       !$form.Controls.Contains($rollback) -or $apply.Enabled -or $rollback.Enabled) {
-        throw 'SELFTEST FAIL: faltan controles o existe alguna accion administrativa habilitada antes de analizar.'
-    }
-    Write-Host 'PASS GUI: WinForms inicializado y cambios administrativos deshabilitados antes de analizar.'
-    $form.Dispose()
-    exit 0
-}
-[void][Windows.Forms.Application]::Run($form)
-) {
-        [void][Windows.Forms.MessageBox]::Show('Respaldo no valido o fuera del directorio esperado.','ParcheCAD')
-        return
-    }
-    if([Windows.Forms.MessageBox]::Show('Revertir solo las reglas nuevas registradas en esta operacion? Requiere administrador y confirmacion en consola.','Revertir reglas','YesNo','Warning') -ne 'Yes'){return}
-    PCAD-LaunchAdmin -Mode 'Rollback' -Manifest $resolved
 })
 $start.Add_Click({PCAD-Begin})
 $open.Add_Click({
@@ -316,6 +256,8 @@ $cancel.Add_Click({
 })
 $exit.Add_Click({$form.Close()})
 $form.Add_FormClosing({
+    param($sender,$e)
+    if($null -ne $script:AdminProc){$script:AdminProc.Refresh();if(!$script:AdminProc.HasExited){$e.Cancel=$true;return}}
     $timer.Stop()
     if($null -ne $script:Proc){
         try{$script:Proc.Refresh();if(!$script:Proc.HasExited){$script:Proc.Kill()}}catch{}
@@ -323,4 +265,11 @@ $form.Add_FormClosing({
     }
 })
 $form.Add_Shown({PCAD-Begin})
+if($SelfTest){
+    if(!$form.Controls.Contains($preview) -or !$form.Controls.Contains($apply) -or
+       !$form.Controls.Contains($rollback) -or $apply.Enabled -or $rollback.Enabled){throw 'GUI selftest: controls missing or dangerous startup state'}
+    Write-Host 'PASS GUI: form and controls initialized; apply/rollback disabled until diagnostics.'
+    $form.Dispose()
+    exit 0
+}
 [void][Windows.Forms.Application]::Run($form)
