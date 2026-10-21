@@ -1,8 +1,11 @@
 # F0: inventario; no toca firewall, registro, servicios ni tareas.
 [CmdletBinding()]
-param([string]$OutputDirectory='',[switch]$NoExport)
+param([string]$OutputDirectory='',[switch]$NoExport,[switch]$WriteExitMarker)
 Set-StrictMode -Version 2.0
 $ErrorActionPreference='Stop'
+if($WriteExitMarker -and ($NoExport -or [string]::IsNullOrWhiteSpace($OutputDirectory))) {
+    throw 'WriteExitMarker requiere directorio de salida y exportacion habilitada.'
+}
 . (Join-Path $PSScriptRoot 'ParcheCAD.Core.ps1')
 . (Join-Path $PSScriptRoot 'ParcheCAD.Catalogo.ps1')
 . (Join-Path $PSScriptRoot 'ParcheCAD.Historico.ps1')
@@ -135,5 +138,16 @@ Write-Host ''
 Write-Host ('Estado: {0}' -f $overall)
 if ($folder) {Write-Host ('Informes locales: {0}' -f $folder)}
 Write-Host 'ParcheCAD F0-F4 no creo ni retiro ninguna regla durante este diagnostico.'
-if ($errors -gt 0) {exit 2}
-exit 0
+$exitCode=if($errors -gt 0){2}else{0}
+if($WriteExitMarker){
+    try {
+        # Unique per-run directory supplied by Panel; this is an explicit
+        # completion protocol, not a firewall modification or arbitrary path.
+        $marker=Join-Path $OutputDirectory 'diagnostico.exitcode'
+        [IO.File]::WriteAllText($marker,[string]$exitCode,(New-Object Text.UTF8Encoding($false)))
+    } catch {
+        Write-Warning 'No se pudo registrar el final del diagnostico; el panel debe marcarlo parcial.'
+        $exitCode=2
+    }
+}
+exit $exitCode
