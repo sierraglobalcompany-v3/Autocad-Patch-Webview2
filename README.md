@@ -2,7 +2,7 @@
 
 Proyecto de control y diagnóstico de conectividad para instalaciones de AutoCAD 2023, 2024, 2025, 2026 y 2027 en Windows.
 
-> **Estado: planificación / F0 pendiente.** Todavía no existe una versión 4.0 validada en Windows. Las versiones históricas 2.x y 3.x no son releases de este repositorio.
+> **Estado: desarrollo F0–F4 en PRs Draft.** CI Windows PS5.1/7 verde; no existe release 4.0 ni validación de firewall real/GUI. Las versiones históricas 2.x y 3.x no son releases de este repositorio.
 
 ## Objetivo
 
@@ -31,7 +31,13 @@ Proyecto de control y diagnóstico de conectividad para instalaciones de AutoCAD
 5. **F4 — Controles de firewall**: solo acciones explícitas, reversibles, probadas y con vista previa de impacto.
 6. **F5 — QA / release**: validación real con Windows 10/11, PowerShell 5.1, antivirus activo y varias instalaciones.
 
-**NEXT:** F0, diagnóstico de solo lectura. Las primeras pruebas deben producir informes reproducibles sin alterar Windows.
+**Estado técnico:** F0–F2 diagnóstico/clasificación, F3 atribución observacional de WebView2 y F4 planificador con aplicar/rollback (este último validado únicamente con mocks). La vista previa de F4 no crea reglas.
+
+Para ejecutar el diagnóstico en consola: `powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File .\src\ParcheCAD.Diagnostico.ps1`. Para visualizar un plan de reglas de solo lectura: `powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File .\src\ParcheCAD.Reglas.ps1 -Mode Preview`.
+
+**No ejecutar todavía Apply/Rollback en el equipo principal**: el motor tiene pruebas simuladas, pero no ha superado QA de mutaciones reales en VM aislada. El panel gráfico sigue siendo de solo lectura.
+
+**NEXT:** QA de aplicación/reversión en VM aislada; después integración de los controles con el panel y candidata RC1. No se pide probar cada módulo al usuario.
 
 ## Desarrollo
 
