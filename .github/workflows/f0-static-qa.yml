@@ -23,6 +23,12 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           & .\src\ParcheCAD.Diagnostico.ps1 -NoExport
+      - name: F7 end-to-end partial diagnostic on incomplete transaction
+        shell: powershell
+        timeout-minutes: 6
+        run: |
+          $ErrorActionPreference='Stop'
+          & .\tests\F7.Diagnostico.Integration.ps1
       - name: WinForms construction and control safety smoke (no UI interaction)
         shell: powershell
         timeout-minutes: 3
