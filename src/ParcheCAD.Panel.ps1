@@ -19,6 +19,10 @@ $script:Started=Get-Date
 $script:LastReport=$null
 $script:LastExitCode=$null
 $script:AdminProc=$null
+$script:MonitorProc=$null
+$script:MonitorRoot=''
+$script:MonitorStopRequested=$false
+$script:MonitorErr=''
 # CI fixture only: never execute an administrative command or change the firewall.
 if($InteractionSelfTest -and ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hosted')) {
     throw 'InteractionSelfTest requires an ephemeral GitHub-hosted Windows runner.'
@@ -38,8 +42,8 @@ function PCAD-Button([string]$Text,[int]$X,[int]$Y,[int]$W) {
 }
 $form=New-Object Windows.Forms.Form
 $form.Text='ParcheCAD 4.0 | Diagnostico AutoCAD 2023-2027'
-$form.ClientSize=New-Object Drawing.Size(945,715)
-$form.MinimumSize=New-Object Drawing.Size(955,755)
+$form.ClientSize=New-Object Drawing.Size(945,780)
+$form.MinimumSize=New-Object Drawing.Size(955,820)
 $form.FormBorderStyle='FixedSingle';$form.MaximizeBox=$false
 $form.StartPosition='CenterScreen';$form.BackColor=[Drawing.Color]::White
 $form.Font=New-Object Drawing.Font('Segoe UI',10)
@@ -58,23 +62,27 @@ $exit=PCAD-Button 'SALIR' 790 275 135
 $preview=PCAD-Button 'VISTA PREVIA DE BLOQUEOS' 20 334 295
 $apply=PCAD-Button 'APLICAR CON CONFIRMACION' 328 334 300
 $rollback=PCAD-Button 'REVERTIR OPERACION PROPIA' 642 334 283
-$progressLabel=PCAD-Label 'Listo para iniciar' 20 399 905 30
+$monitorStart=PCAD-Button 'INICIAR MONITOR AUTOCAD / WEBVIEW2' 20 395 440
+$monitorStop=PCAD-Button 'DETENER MONITOR Y GUARDAR LOG' 475 395 450
+$progressLabel=PCAD-Label 'Listo para iniciar' 20 456 905 30
 $bar=New-Object Windows.Forms.ProgressBar
-$bar.Location=New-Object Drawing.Point(20,432);$bar.Size=New-Object Drawing.Size(905,19)
+$bar.Location=New-Object Drawing.Point(20,489);$bar.Size=New-Object Drawing.Size(905,19)
 $bar.Minimum=0;$bar.Maximum=100
-$status=PCAD-Label 'Estado: pendiente de diagnostico' 20 464 905 30 11
+$status=PCAD-Label 'Estado: pendiente de diagnostico' 20 522 905 30 11
 $details=New-Object Windows.Forms.TextBox
-$details.Location=New-Object Drawing.Point(20,500);$details.Size=New-Object Drawing.Size(905,158)
+$details.Location=New-Object Drawing.Point(20,557);$details.Size=New-Object Drawing.Size(905,160)
 $details.Multiline=$true;$details.ScrollBars='Both'
 $details.ReadOnly=$true;$details.WordWrap=$false
 $details.Font=New-Object Drawing.Font('Consolas',9)
 $details.Text='ParcheCAD 4.0: inventario por version, reglas y procesos WebView2.'
-$foot=PCAD-Label 'Los cambios requieren administrador y confirmacion escrita; se guardan respaldos locales.' 20 670 905 28 9
+$foot=PCAD-Label 'Los cambios requieren administrador y confirmacion escrita; se guardan respaldos locales.' 20 741 905 28 9
 $foot.ForeColor=[Drawing.Color]::DimGray
-$form.Controls.AddRange(@($header,$sub,$installed,$webview,$rules,$why,$start,$open,$cancel,$exit,$preview,$apply,$rollback,$progressLabel,$bar,$status,$details,$foot))
+$form.Controls.AddRange(@($header,$sub,$installed,$webview,$rules,$why,$start,$open,$cancel,$exit,$preview,$apply,$rollback,$monitorStart,$monitorStop,$progressLabel,$bar,$status,$details,$foot))
 $cancel.Enabled=$false
-$preview.Enabled=$false;$apply.Enabled=$false;$rollback.Enabled=$false
+$preview.Enabled=$false;$apply.Enabled=$false;$rollback.Enabled=$false;$monitorStop.Enabled=$false
 function PCAD-Busy([bool]$Busy) {
+    $script:monitorStart.Enabled=(-not $Busy) -and ($null -eq $script:MonitorProc)
+    $script:monitorStop.Enabled=($null -ne $script:MonitorProc) -and (-not $script:MonitorStopRequested)
     $script:start.Enabled=-not $Busy
     $script:open.Enabled=-not $Busy
     $script:cancel.Enabled=$Busy -and ($null -eq $script:AdminProc)
@@ -221,9 +229,94 @@ function PCAD-Finish {
     $details.Text=$lines -join [Environment]::NewLine
     PCAD-Busy $false
 }
+# F17 monitor observer: owned, read-only child, independently stoppable.
+function PCAD-MonitorTick {
+    $owned=$script:MonitorProc
+    if($null -eq $owned){return}
+    try{$owned.Refresh()}catch{return}
+    if(!$owned.HasExited){return}
+    $nativeCode=2
+    try{$nativeCode=[int]$owned.ExitCode}catch{}
+    $owned.Dispose();$script:MonitorProc=$null
+    $script:MonitorStopRequested=$false
+    $path=Join-Path $script:MonitorRoot 'monitor.json'
+    $marker=Join-Path $script:MonitorRoot 'monitor.exitcode'
+    $valid=$false;$data=$null
+    if($nativeCode -eq 0 -and (Test-Path -LiteralPath $path -PathType Leaf) -and
+       (Test-Path -LiteralPath $marker -PathType Leaf)){
+        try{
+            $data=Get-Content -LiteralPath $path -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+            $exitText=(Get-Content -LiteralPath $marker -Raw -ErrorAction Stop).Trim()
+            $valid=($exitText -ceq '0' -and $data.Schema -ceq 'PCAD_MONITOR_1' -and
+                    $data.ReadOnly -eq $true -and $data.Result -ceq 'MONITOREO_COMPLETADO_OBSERVACIONAL' -and
+                    $data.BlockedTrafficVerified -eq $false -and $data.WebViewIsolationVerified -eq $false)
+        }catch{}
+    }
+    PCAD-Busy ($null -ne $script:Proc -or $null -ne $script:AdminProc)
+    if($null -eq $script:Proc -and $null -eq $script:AdminProc){
+        if($valid){
+            $status.Text='Monitor FINALIZADO. Observacion solamente; no verifica bloqueo total.'
+            $status.ForeColor=[Drawing.Color]::DarkBlue
+            $details.Text=('Informe local: {0}' -f $path)+[Environment]::NewLine+
+               ('Muestras: {0}; Eventos: {1}; TCP: {2}; UDP endpoints: {3}' -f
+                 $data.Samples,@($data.Events).Count,$data.ConnectionEventsTcp,$data.UdpEndpointsObserved)+
+               [Environment]::NewLine+'AutoCAD/WebView2: correlacion PROBABLE; ninguna ausencia de trafico certificada.'
+        }else{
+            $status.Text='Monitor PARCIAL o ERROR. No interpretar ausencia de llamadas.'
+            $status.ForeColor=[Drawing.Color]::Firebrick
+            $details.Text='Ver logs locales: '+$script:MonitorErr
+        }
+    }
+    if($null -eq $script:Proc -and $null -eq $script:AdminProc){$timer.Stop()}
+}
+function PCAD-MonitorBegin {
+    if($null -ne $script:MonitorProc -or $null -ne $script:Proc -or $null -ne $script:AdminProc){return}
+    try {
+        $runner=Join-Path $PSScriptRoot 'ParcheCAD.Monitor.ps1'
+        if(!(Test-Path -LiteralPath $runner -PathType Leaf)){throw 'No existe el monitor en este paquete.'}
+        if(!(Test-Path -LiteralPath $script:Reports -PathType Container)){
+            $null=New-Item -ItemType Directory -Path $script:Reports -Force -ErrorAction Stop
+        }
+        $id=[guid]::NewGuid().ToString('N')
+        $script:MonitorRoot=Join-Path $script:Reports ('monitor_'+$id)
+        $logOut=Join-Path $script:Reports ('monitor_'+$id+'.stdout.log')
+        $script:MonitorErr=Join-Path $script:Reports ('monitor_'+$id+'.stderr.log')
+        $args='-NoLogo -NoProfile -ExecutionPolicy RemoteSigned -File "{0}" -OutputDirectory "{1}" -DurationSeconds 600 -IntervalMilliseconds 1000' -f $runner,$script:MonitorRoot
+        $script:MonitorProc=Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList $args -WindowStyle Hidden -RedirectStandardOutput $logOut -RedirectStandardError $script:MonitorErr -PassThru -ErrorAction Stop
+        $script:MonitorStopRequested=$false
+        PCAD-Busy $false
+        $status.Text='MONITOR ACTIVO: abre AutoCAD, realiza pruebas y despues pulsa detener.'
+        $status.ForeColor=[Drawing.Color]::DarkBlue
+        $details.Text='Registro solo lectura sin IP, URLs ni argumentos. Auto-finaliza en 10 minutos.'+[Environment]::NewLine+
+            'Puedes usar aplicar/revertir con sus confirmaciones habituales durante el monitoreo.'+[Environment]::NewLine+
+            'No demuestra intentos fallidos o bloqueos del firewall. Informe: '+$script:MonitorRoot
+        $timer.Start()
+    } catch {
+        PCAD-Busy $false
+        [void][Windows.Forms.MessageBox]::Show($_.Exception.Message,'Monitor no iniciado')
+    }
+}
+function PCAD-MonitorStop {
+    if($null -eq $script:MonitorProc -or $script:MonitorStopRequested){return}
+    if(!(Test-Path -LiteralPath $script:MonitorRoot -PathType Container)){
+        $status.Text='Monitor iniciando: vuelve a pulsar detener en unos instantes.'
+        return
+    }
+    try{
+        [IO.File]::WriteAllText((Join-Path $script:MonitorRoot 'detener.solicitud'),'STOP',(New-Object Text.UTF8Encoding($false)))
+        $script:MonitorStopRequested=$true
+        $monitorStop.Enabled=$false
+        $status.Text='Deteniendo monitor de forma segura y guardando informe...'
+        $timer.Start()
+    }catch{
+        $status.Text='ERROR al solicitar detencion; el monitor se detendra por duracion maxima.'
+        $status.ForeColor=[Drawing.Color]::Firebrick
+    }
+}
 $timer=New-Object Windows.Forms.Timer
 $timer.Interval=400
 $timer.Add_Tick({
+    PCAD-MonitorTick
     if($null -ne $script:AdminProc){
         $script:AdminProc.Refresh()
         if($script:AdminProc.HasExited){
@@ -327,6 +420,8 @@ $rollback.Add_Click({
     }
 })
 $start.Add_Click({PCAD-Begin})
+$monitorStart.Add_Click({PCAD-MonitorBegin})
+$monitorStop.Add_Click({PCAD-MonitorStop})
 $open.Add_Click({
     if(Test-Path -LiteralPath $script:Reports -PathType Container){
         Start-Process -FilePath explorer.exe -ArgumentList ('"'+$script:Reports+'"')
@@ -354,6 +449,15 @@ $exit.Add_Click({$form.Close()})
 $form.Add_FormClosing({
     param($sender,$e)
     if($null -ne $script:AdminProc){$script:AdminProc.Refresh();if(!$script:AdminProc.HasExited){$e.Cancel=$true;return}}
+    if($null -ne $script:MonitorProc){
+        PCAD-MonitorTick
+        if($null -ne $script:MonitorProc){
+            $e.Cancel=$true
+            PCAD-MonitorStop
+            $status.Text='Esperando cierre seguro del monitor antes de salir.'
+            return
+        }
+    }
     $timer.Stop()
     if($null -ne $script:Proc -and !(PCAD-StopOwnedDiagnostic)){
         $e.Cancel=$true
@@ -473,7 +577,8 @@ if($InteractionSelfTest){
 }
 if($SelfTest){
     if(!$form.Controls.Contains($preview) -or !$form.Controls.Contains($apply) -or
-       !$form.Controls.Contains($rollback) -or $apply.Enabled -or $rollback.Enabled){throw 'GUI selftest: controls missing or dangerous startup state'}
+       !$form.Controls.Contains($rollback) -or !$form.Controls.Contains($monitorStart) -or
+        !$form.Controls.Contains($monitorStop) -or $monitorStop.Enabled -or $apply.Enabled -or $rollback.Enabled){throw 'GUI selftest: controls missing or dangerous startup state'}
     $script:LastExitCode=0
     $script:LastReport=[pscustomobject]@{
         Tool='ParcheCAD';SchemaVersion=1;ReadOnly=$true;Result='PARCIAL_NO_VERIFICADO'
@@ -482,7 +587,7 @@ if($SelfTest){
         }
     }
     PCAD-Busy $false
-    if($apply.Enabled){throw 'GUI selftest: partial diagnostics allowed apply'}
+    if($apply.Enabled -or !$monitorStart.Enabled -or $monitorStop.Enabled){throw 'GUI selftest: unsafe monitor/action state'}
     $script:LastReport.Result='DIAGNOSTICO_COMPLETADO_SIN_CAMBIOS'
     PCAD-Busy $false
     if($apply.Enabled){throw 'GUI selftest: missing recovery evidence allowed apply'}
@@ -505,7 +610,7 @@ if($SelfTest){
     if($apply.Enabled){throw 'GUI selftest: nonzero child exit allowed apply'}
     $script:LastExitCode=0
     PCAD-Busy $true
-    if($apply.Enabled -or $rollback.Enabled){throw 'GUI selftest: modifications allowed while busy'}
+    if($apply.Enabled -or $rollback.Enabled -or $monitorStart.Enabled){throw 'GUI selftest: modifications/monitor allowed while busy'}
     Write-Host 'PASS GUI: form initialized, partial diagnostics blocked, valid preview gated and busy state protected.'
     $form.Dispose()
     exit 0

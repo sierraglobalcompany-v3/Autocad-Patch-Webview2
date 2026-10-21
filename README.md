@@ -62,3 +62,8 @@ Herramienta independiente, no afiliada a Autodesk o Microsoft. El comportamiento
 
 ## F17 — QA integrada, laboratorio solamente
 La rama F17 incorpora `tools/Invoke-ParcheCADF17.ps1` para capturas de diagnóstico `Before` y `After` separadas y evaluación `Evaluate` usando F12, sin modificaciones al firewall. Documento operativo: `docs/F17_PROTOCOLO_QA_INTEGRADA.md`. Prueba: `tests/F17.Session.Tests.ps1`. La matriz generada siempre deja evidencias externas pendientes y `Decision=BLOCKED`; NO RC1, sin pruebas reales de AutoCAD ni WebView2 exclusivo.
+
+
+## Monitor temporal de AutoCAD/WebView2 (F17)
+
+El panel incorpora **INICIAR MONITOR** y **DETENER MONITOR Y GUARDAR LOG**. Tras iniciar, abrir y probar AutoCAD; el monitor lee procesos y conexiones TCP/endpoints UDP, permite seguir usando Apply/Rollback con las confirmaciones existentes y al detener genera `informes/monitor_*/monitor.json` y `resumen.txt`. Finaliza automaticamente a los 10 minutos si no se detiene manualmente. El informe no guarda IP, URLs, parametros ni rutas privadas. No instala servicios ni cambia firewall o antivirus. **El sondeo NO captura todo el trafico, ni verifica intentos de bloqueo o aislamiento de WebView2**; no confundir actividad observada con ausencia de red. Guía: `docs/F17_PROTOCOLO_QA_INTEGRADA.md`.

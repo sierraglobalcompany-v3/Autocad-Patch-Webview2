@@ -53,6 +53,7 @@ try {
                            'tools\Invoke-ParcheCADRC12.ps1',
                            'src\ParcheCAD.RCGates.ps1',
                            'src\ParcheCAD.Diagnostico.ps1',
+                           'src\ParcheCAD.Monitor.ps1',
                            'docs\F17_PROTOCOLO_QA_INTEGRADA.md')){
         $p=Join-Path $unpacked $required
         if(!(Test-Path -LiteralPath $p -PathType Leaf)){throw ('F17 missing from extracted ZIP: '+$required)}
@@ -92,6 +93,15 @@ try {
        @($matrix.Gates).Count -ne 10 -or !$matrix.ContentsDistinctVerified -or
        !$matrix.TimestampOrderVerified -or $matrix.SameMachineVerified -ne $false){
         throw 'Extracted F17 gave an unsafe or incomplete RC assessment.'
+    }
+    # From extracted ZIP: run the read-only monitor for a bounded 2-second smoke.
+    $monitorDir=Join-Path $tmp 'F17-MONITOR-PACKAGED'
+    & $exe -NoLogo -NoProfile -ExecutionPolicy RemoteSigned -File (Join-Path $unpacked 'src\ParcheCAD.Monitor.ps1') -OutputDirectory $monitorDir -DurationSeconds 2 -IntervalMilliseconds 500
+    if($LASTEXITCODE -ne 0){throw 'Extracted temporary monitor failed.'}
+    $mon=Get-Content -LiteralPath (Join-Path $monitorDir 'monitor.json') -Raw | ConvertFrom-Json
+    if($mon.Schema -cne 'PCAD_MONITOR_1' -or $mon.BlockedTrafficVerified -ne $false -or
+       $mon.WebViewIsolationVerified -ne $false -or $mon.Result -cne 'MONITOREO_COMPLETADO_OBSERVACIONAL'){
+        throw 'Extracted monitor failed to preserve observational limits.'
     }
     Write-Host ('PASS F6 package: deterministic SHA256, {0} files, extracted CLI, WinForms and F17 evidence' -f $verified) -ForegroundColor Green
 } finally {

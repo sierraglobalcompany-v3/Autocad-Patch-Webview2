@@ -70,3 +70,15 @@ Preparar **una unica sesion documentada y reproducible** en VM Windows con escri
 - **NEXT:** ejecutar una sola QA integral autorizada cuando exista laboratorio; si descubre defecto, corregir causa raiz y QA cruzada antes de reconsiderar RC1.
 
 **No merge, no deploy, no release, no cambio de licencias ni de antivirus.**
+
+
+## Monitor temporal incorporado al panel (una prueba en el Windows del usuario)
+
+1. Abrir ParcheCAD, dejar terminar el diagnostico inicial y pulsar **INICIAR MONITOR AUTOCAD / WEBVIEW2**. No necesita administrador para las consultas de lectura disponibles.
+2. Abrir AutoCAD y reproducir las funciones relevantes. Para comparar estados, si se autoriza, aplicar/revertir desde los controles normales del programa durante la misma captura; el monitor **no aplica reglas**.
+3. Pulsar **DETENER MONITOR Y GUARDAR LOG**. Se solicita el cierre cooperativo del proceso, no se mata AutoCAD/WebView2 ni se deshabilita el antivirus. Si no se detiene, finaliza por seguridad a los 600 segundos.
+4. Usar **ABRIR INFORMES** y revisar la carpeta `informes/monitor_<id>/monitor.json` y `resumen.txt`. Es una unica sesion local. Compartir solo tras revisar su contenido.
+
+**Datos capturados:** cambios entre muestras de procesos AutoCAD, Autodesk y WebView2, PID/padre, inicio (identidad), atribucion probable al host, conexiones TCP observadas por puerto/estado/clase de direccion y presencia de endpoints UDP. Sin IP remotas, URL, comandos ni rutas de usuario. Un endpoint UDP no prueba envio. Una conexion TCP observada no demuestra que otras fueron bloqueadas. Algunos eventos muy cortos se pueden perder entre muestras, y la reutilizacion de PID o WebView2 compartido limita la atribucion. No se capturan paquetes ni se cambia la auditoria de Windows. Los campos `BlockedTrafficVerified=false` y `WebViewIsolationVerified=false` siempre expresan los limites reales.
+
+**QA:** `tests/Monitor.Tests.ps1` comprueba duracion acotada, cierre cooperativo, no sobrescritura, privacidad y banderas sin certificacion en PS5.1/PS7; el test de ZIP prueba el monitor desde el paquete extraido. El flujo visual interactivo final en PC de usuario sigue pendiente hasta que haya informe real. No cargar automaticamente los logs al repositorio.
