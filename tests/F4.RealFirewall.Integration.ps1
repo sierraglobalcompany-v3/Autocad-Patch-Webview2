@@ -46,6 +46,7 @@ try {
     # Simular desinstalacion del programa antes de revertir.
     Remove-Item -LiteralPath $exe -Force -ErrorAction Stop
     $undo=Invoke-PCADRollbackRules -JournalPath $manifest -Commit
+    Write-Host ('F4 Rollback: {0}' -f ($undo | ConvertTo-Json -Depth 7 -Compress))
     if($undo.Status -ne 'ROLLED_BACK' -or $undo.Removed -ne 1){throw 'No se revirtio al quitar el EXE.'}
     $after=Get-PCADActualRuleStatus -RuleName $ruleName -Program $exe
     if($after.State -ne 'MISSING'){throw 'Regla persiste tras rollback.'}
