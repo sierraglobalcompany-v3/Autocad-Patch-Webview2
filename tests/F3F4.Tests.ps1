@@ -108,6 +108,17 @@ try {
             }
         }
     }
+    function Get-NetFirewallInterfaceFilter {
+        [CmdletBinding()]
+        param([Parameter(ValueFromPipeline=$true)]$Rule)
+        process {
+            if($null -ne $Rule){
+                return [pscustomobject]@{
+                    InterfaceAlias=if($Rule.PSObject.Properties['MockInterfaceAlias']){$Rule.MockInterfaceAlias}else{'Any'}
+                }
+            }
+        }
+    }
     function New-NetFirewallRule {
         [CmdletBinding()]
         param($Name,$DisplayName,$Group,$Direction,$Action,$Program,$Enabled,$Profile,$PolicyStore)
@@ -147,7 +158,8 @@ try {
     # narrows to TCP, a single destination, an app service or an interface.
     foreach($drift in @(
         @{MockProtocol='TCP'},@{MockRemoteAddress='192.0.2.10'},
-        @{MockService='Spooler'},@{MockInterfaceType='Wireless'}
+        @{MockService='Spooler'},@{MockInterfaceType='Wireless'},
+        @{MockInterfaceAlias='Ethernet'}
     )){
         $one=$plan.Entries[0]
         $rule=[pscustomobject]@{
