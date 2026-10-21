@@ -44,7 +44,7 @@ $time=[DateTimeOffset]::Parse('2020-01-01T00:00:00+00:00')
 $manifestLines=New-Object 'System.Collections.Generic.List[string]'
 $fs=[IO.File]::Open($zipFile,[IO.FileMode]::Create,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
 try {
-    $zip=New-Object IO.Compression.ZipArchive($fs,[IO.Compression.ZipArchiveMode]::Create,$true)
+    $zip=[IO.Compression.ZipArchive]::new($fs,[IO.Compression.ZipArchiveMode]::Create,$true)
     try {
         foreach($name in $items){
             $file=Join-Path $root ($name.Replace('/',[IO.Path]::DirectorySeparatorChar))
@@ -63,7 +63,7 @@ try {
         $manifest.LastWriteTime=$time
         $stream=$manifest.Open()
         try {
-            $writer=New-Object IO.StreamWriter($stream,(New-Object Text.UTF8Encoding($false)))
+            $writer=[IO.StreamWriter]::new($stream,([Text.UTF8Encoding]::new($false)))
             try {$writer.Write(($manifestLines -join [Environment]::NewLine)+[Environment]::NewLine)}
             finally {$writer.Dispose()}
         } finally {$stream.Dispose()}
