@@ -84,6 +84,16 @@ function Get-PCADRuleName {
         return 'PCAD4_A_'+$hex+'_OUT'
     } finally { $sha.Dispose() }
 }
+# A single unrestricted filter value is required; e.g. "Any".
+# Missing, multiple, or narrowed values must never be accepted as a complete
+# ParcheCAD block rule. The caller owns the Windows NetSecurity objects.
+function Test-PCADFirewallFilterAny {
+    [CmdletBinding()]
+    param($Value)
+    if($null -eq $Value){return $false}
+    $items=@($Value)
+    return ($items.Count -eq 1 -and [string]$items[0] -ieq 'Any')
+}
 function Get-PCADActualRuleStatus {
     [CmdletBinding()]
     param([string]$RuleName,[string]$Program)
@@ -114,10 +124,38 @@ function Get-PCADActualRuleStatus {
     $sameDirection=([string]$one.Direction -eq 'Outbound')
     $sameEnabled=([string]$one.Enabled -eq 'True')
     $sameProfile=([string]$one.Profile -eq 'Any')
-    if($samePath -and $sameGroup -and $sameAction -and $sameDirection -and $sameEnabled -and $sameProfile) {
-        return [pscustomobject]@{State='EXISTS_VALID';Description='Regla ParcheCAD coincide con ruta, grupo, salida, bloqueo y perfiles'}
+    if(!($samePath -and $sameGroup -and $sameAction -and $sameDirection -and $sameEnabled -and $sameProfile)) {
+        return [pscustomobject]@{State='CONFLICT';Description='Regla con nombre ocupado o configuracion distinta: no modificar'}
     }
-    return [pscustomobject]@{State='CONFLICT';Description='Regla con nombre ocupado o configuracion distinta: no modificar'}
+
+    # F16: Windows Firewall rules contain independent NetSecurity filters.
+    # A rule with a valid EXE path may still be TCP-only, remote-IP-only or
+    # service-only. Do not call that rule EXISTS_VALID and silently skip it.
+    # Read failures are NOT MISSING; they must fail closed in Preview/Apply.
+    $port=@($one | Get-NetFirewallPortFilter -ErrorAction Stop)
+    $address=@($one | Get-NetFirewallAddressFilter -ErrorAction Stop)
+    $service=@($one | Get-NetFirewallServiceFilter -ErrorAction Stop)
+    $interfaceType=@($one | Get-NetFirewallInterfaceTypeFilter -ErrorAction Stop)
+    if($port.Count -ne 1 -or $address.Count -ne 1 -or
+       $service.Count -ne 1 -or $interfaceType.Count -ne 1){
+        return [pscustomobject]@{State='CONFLICT';Description='Filtros de puertos, direcciones, servicio o interfaz ausentes/ambiguos'}
+    }
+    $fullScope=(
+        (Test-PCADFirewallFilterAny $port[0].Protocol) -and
+        (Test-PCADFirewallFilterAny $port[0].LocalPort) -and
+        (Test-PCADFirewallFilterAny $port[0].RemotePort) -and
+        (Test-PCADFirewallFilterAny $address[0].LocalAddress) -and
+        (Test-PCADFirewallFilterAny $address[0].RemoteAddress) -and
+        (Test-PCADFirewallFilterAny $service[0].Service) -and
+        (Test-PCADFirewallFilterAny $interfaceType[0].InterfaceType)
+    )
+    if(!$fullScope){
+        return [pscustomobject]@{State='CONFLICT';Description='Regla restringida por protocolo, puertos, IP, servicio o interfaz; no modificar'}
+    }
+    return [pscustomobject]@{
+        State='EXISTS_VALID'
+        Description='Regla propia con salida Block, perfiles Any y filtros amplios de protocolo, puertos, direcciones, servicio e interfaz'
+    }
 }
 function New-PCADRulePlan {
     [CmdletBinding()]
