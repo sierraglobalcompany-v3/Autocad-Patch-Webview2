@@ -318,6 +318,10 @@ if($InteractionSelfTest){
         $createdRunRoot=$script:RunRoot
         if(!$script:Proc.WaitForExit(65000)){throw 'F9: read-only diagnostic child exceeded 65 seconds'}
         Write-Host ('F9 child before finish: PID={0}; ExitCode={1}; HasExited={2}; dataDir={3}' -f $script:Proc.Id,$script:Proc.ExitCode,$script:Proc.HasExited,$script:RunRoot)
+        $rawExit='UNAVAILABLE'
+        try {$rawExit=$script:Proc.GetType().GetProperty('ExitCode').GetValue($script:Proc,$null)} catch {$rawExit=$_.Exception.GetType().Name}
+        Write-Host ('F9 process type: {0}; reflected ExitCode={1}; PS exit property type={2}' -f $script:Proc.GetType().FullName,$rawExit,$script:Proc.PSObject.Properties['ExitCode'].MemberType)
+
         PCAD-Finish
         Write-Host ('F9 after finish: procNull={0}; LastExitCode={1}; reportNull={2}' -f ($null -eq $script:Proc),$script:LastExitCode,($null -eq $script:LastReport))
         if($null -eq $script:LastReport -or $null -eq $script:LastExitCode){
