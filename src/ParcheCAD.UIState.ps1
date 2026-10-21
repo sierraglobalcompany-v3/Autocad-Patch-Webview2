@@ -18,7 +18,7 @@ function Get-PCADReportRows {
     [CmdletBinding()]
     param($Object,[Parameter(Mandatory=$true)][string]$Name)
     $value=Get-PCADReportField -Object $Object -Name $Name
-    return ,@($value | Where-Object {$null -ne $_})
+    foreach($item in @($value)) {if($null -ne $item){Write-Output $item}}
 }
 
 function Get-PCADReportUiState {
