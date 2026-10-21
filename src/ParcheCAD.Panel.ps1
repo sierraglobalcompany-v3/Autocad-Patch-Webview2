@@ -335,13 +335,9 @@ if($InteractionSelfTest){
         if($null -eq $script:Proc -or !$cancel.Enabled -or $apply.Enabled){throw 'F9: Analyze did not start read-only child'}
         $createdRunRoot=$script:RunRoot
         if(!$script:Proc.WaitForExit(65000)){throw 'F9: read-only diagnostic child exceeded 65 seconds'}
-        Write-Host ('F9 child before finish: PID={0}; ExitCode={1}; HasExited={2}; dataDir={3}' -f $script:Proc.Id,$script:Proc.ExitCode,$script:Proc.HasExited,$script:RunRoot)
+        PCAD-Finish
         if($null -eq $script:LastReport -or $null -eq $script:LastExitCode){
-            Write-Host ('F9 diagnostic subprocess exit: {0}' -f $script:LastExitCode)
-            Write-Host ('F9 diagnostic status: {0}' -f $status.Text)
-            Write-Host ('F9 diagnostic stderr: {0}' -f (PCAD-ReadLog $script:LogErr))
-            Write-Host ('F9 diagnostic stdout: {0}' -f (PCAD-ReadLog $script:LogOut))
-            throw 'F9: no report or exit code'
+            throw 'F9: diagnostic process finished without a readable report or completion marker'
         }
         $ui=Get-PCADReportUiState -Report $script:LastReport -ExitCode $script:LastExitCode
         if(!$start.Enabled -or $cancel.Enabled -or $apply.Enabled){throw 'F9: wrong controls after read-only diagnostic on clean runner'}
