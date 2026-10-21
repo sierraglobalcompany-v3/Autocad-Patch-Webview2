@@ -1,4 +1,4 @@
-name: ParcheCAD Windows QA (F0-F14)
+name: ParcheCAD Windows QA (F0-F15)
 on:
   pull_request:
   push:
@@ -21,6 +21,7 @@ jobs:
           & .\tests\F11.Cobertura.Tests.ps1
           & .\tests\F12.RCGates.Tests.ps1
           & .\tests\F14.SharedCatalog.Tests.ps1
+          & .\tests\F15.ReparseGuard.Tests.ps1
       - name: Smoke F0 on clean Windows runner (read-only)
         shell: powershell
         timeout-minutes: 6
@@ -76,6 +77,7 @@ jobs:
           & .\tests\F11.Cobertura.Tests.ps1
           & .\tests\F12.RCGates.Tests.ps1
           & .\tests\F14.SharedCatalog.Tests.ps1
+          & .\tests\F15.ReparseGuard.Tests.ps1
 
   f4-real-firewall-ephemeral:
     # Strictly hosted throwaway Windows VM; fixture is a copy of whoami.exe in TEMP.
