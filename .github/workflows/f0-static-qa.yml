@@ -38,3 +38,16 @@ jobs:
           & .\tests\F0.Tests.ps1
           & .\tests\F1F2.Tests.ps1
           & .\tests\F3F4.Tests.ps1
+
+  f4-real-firewall-ephemeral:
+    # Strictly hosted throwaway Windows VM; fixture is a copy of whoami.exe in TEMP.
+    # No AutoCAD files, shared WebView2, third-party rules or production systems touched.
+    runs-on: windows-2022
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply and revert ONLY a temporary test-program firewall rule
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          & .\tests\F4.RealFirewall.Integration.ps1
