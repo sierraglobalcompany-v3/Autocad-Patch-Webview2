@@ -1,9 +1,9 @@
 # PROJECT_CONTINUITY_CURRENT — ParcheCAD 4.0
 
-**Actualizado:** 2026-10-21. **Estado:** F0–F12 desarrolladas en PRs Draft; **SIN RC1 / RELEASE / DEPLOY / MERGE**.  
+**Actualizado:** 2026-10-21. **Estado:** F0–F13 desarrolladas en PRs Draft; **SIN RC1 / RELEASE / DEPLOY / MERGE**.  
 **Repositorio fuente única:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2  
-**Rama vigente:** `feat/f12-integrated-qa-gates` · **PR #14 Draft**, apilado sobre #13→#12→#11→#10→#9→#8→#7→#6→#5→#4→#3. **`main` aún no tiene estas fases.**  
-**CI F12 inicial verificado:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39546699351 — run **#100, 4/4 PASS**. Verificar CI sobre último HEAD tras commits de docs.
+**Rama vigente:** `feat/f13-synthetic-egress-verification` · **PR #15 Draft**, apilado sobre #14→#13→#12→#11→#10→#9→#8→#7→#6→#5→#4→#3. **`main` aún no tiene estas fases.**  
+**CI inicial F13 verificado:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39548196571 — run **#104, 4/4 PASS**, incluye TCP IPv4 sintético efectivo. No confundir con certificación AutoCAD. Verificar CI sobre último HEAD tras commits de docs.
 
 ## Objetivo del usuario y límites no negociables
 
@@ -35,9 +35,10 @@ El usuario quiere impedir la conectividad saliente de **AutoCAD 2023–2027 y to
 | F9 | Eventos Analizar/Cancelar/Cerrar y protocolo fin de diagnóstico | WinForms por eventos sin escritorio/UAC |
 | F10 | Terminación PID propio y recuperación desde otro proceso | Firewall temporal en Windows, no reboot |
 | F11 | Matriz de cobertura EXE/servicios/WebView2/TCP/UDP en JSON/TXT/UI | CI #99 4/4 PASS |
-| **F12** | **Evaluación de diez puertas RC1 desde diagnósticos antes/después** | **CI #100 4/4 PASS inicial; nunca RC1 automático** |
+| F12 | Evaluación de diez puertas RC1 desde diagnósticos antes/después | CI #103 PASS; nunca RC1 automático |
+| **F13** | **Prueba TCP IPv4 real de EXE ficticio: conexión permitida → bloqueada → restaurada; otro EXE intacto** | **CI #104: egress PASS, 4/4 PASS** |
 
-### F12 — trabajo recién realizado
+### F12 — evaluación RC1 disponible
 
 - `src/ParcheCAD.RCGates.ps1`: compara dos diagnósticos sanitizados existentes y valida esquema, diez etapas, recuperación, matriz F11 y coherencia de conteos de reglas. No accede a firewall, no observa red nueva ni ejecuta AutoCAD.
 - `tools/Invoke-ParcheCADRC12.ps1`: lee `-Before` y `-After`, produce `RC12_EVALUACION.json` y `RC12_RESUMEN.txt` (sin rutas/IP privadas). Código de salida 0 indica **evaluación completada**, NO aprobación de RC1.
@@ -48,9 +49,17 @@ El usuario quiere impedir la conectividad saliente de **AutoCAD 2023–2027 y to
 - Evidencia y plan de sesión única: `docs/F12_GATE_RC1_QA_INTEGRADA.md`. ZIP DEV incluye evaluador, CLI y guía; `tools/Build-ParcheCAD.ps1` determinista, `.github/workflows/f0-static-qa.yml` con cuatro jobs Windows.
 - README y SPEC armonizados; PR #14 Draft sobre ramas anteriores.
 
+## F13 — último checkpoint de conectividad
+
+- **Código:** `tests/F13.SyntheticEgress.Integration.ps1`, solo ejecutable en runner GitHub-hosted con administrador. Compila un cliente TCP IPv4 ficticio como `acad.exe` en un directorio único temporal y otro idéntico como `ProbeControl.exe` en ubicación diferente. **No es AutoCAD real**.
+- **Resultados CI #104:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39548196571 — línea base (ambos EXE conectan), regla saliente PCAD4, dos conexiones bloqueadas al objetivo, control permitido, rollback y recuperación de ambas conexiones. Tests antiguos y ZIP DEV también PASS.
+- **Evidencia:** `docs/F13_PRUEBA_EGRESO_TCP_REAL.md`. Se reutilizó el motor F4, sin arquitectura nueva; regla temporal propia eliminada al finalizar.
+- **Limitaciones:** la prueba F13 **no** valida AutoCAD instalado, servicios compartidos, conexiones UDP/IPv6, túneles/proxies ni WebView2. La evaluación F12 sigue `Decision=BLOCKED`. No elevar una prueba sintética a cobertura total.
+- **Entrega:** PR #15 Draft sobre #14 y anteriores; sin merge ni release. Informes privados fuera del repositorio.
+
 ## Reconstrucción desde GitHub
 
-Clonar exactamente la **rama F12**, leer `PROJECT_CONTINUITY_CURRENT.md` + `docs/SPEC_MAESTRA.md` + `docs/F12_GATE_RC1_QA_INTEGRADA.md`, ejecutar GitHub Actions y revisar 4/4 jobs. El artifact temporal `ParcheCAD_4.0_DEV_NOT_RELEASE` contiene ZIP allowlist y SHA256; **NO es instalador RC1 ni está listo para Apply en PC principal**. Ningún JSON local antiguo es necesario para reconstruir el software.
+Clonar exactamente la **rama F13**, leer `PROJECT_CONTINUITY_CURRENT.md` + `docs/SPEC_MAESTRA.md` + `docs/F12_GATE_RC1_QA_INTEGRADA.md`, ejecutar GitHub Actions y revisar 4/4 jobs. El artifact temporal `ParcheCAD_4.0_DEV_NOT_RELEASE` contiene ZIP allowlist y SHA256; **NO es instalador RC1 ni está listo para Apply en PC principal**. Ningún JSON local antiguo es necesario para reconstruir el software.
 
 ## Qué bloquea RC1
 
@@ -63,4 +72,4 @@ Clonar exactamente la **rama F12**, leer `PROJECT_CONTINUITY_CURRENT.md` + `docs
 
 ## NEXT único
 
-**F13 / preparación de aceptación real:** cerrar cualquier defecto de la evaluación F12 y preparar un único entorno de QA Windows interactivo con AutoCAD autorizado, snapshot de restauración, AVG activo, registro de conexiones, prueba UAC y rollback/reinicio. Solo entonces evaluar la evidencia de las diez puertas; si WebView2 sigue sin solución exclusiva, mantener ese objetivo como BLOCKED y plantear una decisión de alcance explícita, **sin declarar éxito falso**. No pedir tests por módulos al usuario, no merge ni Release hasta decisión basada en evidencias.
+**SIGUIENTE: preparar una única QA final con AutoCAD real:** usar la evidencia F13 para distinguir pruebas sintéticas del producto y preparar un entorno Windows interactivo con AutoCAD autorizado, snapshot de restauración, AVG activo, registro de conexiones, prueba UAC y rollback/reinicio. Solo entonces evaluar la evidencia de las diez puertas; si WebView2 sigue sin solución exclusiva, mantener ese objetivo como BLOCKED y plantear una decisión de alcance explícita, **sin declarar éxito falso**. No pedir tests por módulos al usuario, no merge ni Release hasta decisión basada en evidencias.
