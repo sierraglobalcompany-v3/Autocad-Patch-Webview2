@@ -1,7 +1,7 @@
 # ParcheCAD 4.0 - diagnóstico no bloqueante; modificaciones solo con UAC y confirmación.
 #Requires -Version 5.1
 [CmdletBinding()]
-param([switch]$SelfTest)
+param([switch]$SelfTest,[switch]$InteractionSelfTest)
 Set-StrictMode -Version 2.0
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName System.Windows.Forms
@@ -14,10 +14,15 @@ $script:Proc=$null
 $script:RunRoot=''
 $script:LogOut=''
 $script:LogErr=''
+$script:ExitMarker=''
 $script:Started=Get-Date
 $script:LastReport=$null
 $script:LastExitCode=$null
 $script:AdminProc=$null
+# CI fixture only: never execute an administrative command or change the firewall.
+if($InteractionSelfTest -and ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hosted')) {
+    throw 'InteractionSelfTest requires an ephemeral GitHub-hosted Windows runner.'
+}
 function PCAD-Label([string]$Text,[int]$X,[int]$Y,[int]$W,[int]$H,[int]$Size=10) {
     $o=New-Object Windows.Forms.Label
     $o.Text=$Text;$o.Location=New-Object Drawing.Point($X,$Y)
@@ -70,14 +75,14 @@ $form.Controls.AddRange(@($header,$sub,$installed,$webview,$rules,$why,$start,$o
 $cancel.Enabled=$false
 $preview.Enabled=$false;$apply.Enabled=$false;$rollback.Enabled=$false
 function PCAD-Busy([bool]$Busy) {
-    $start.Enabled=-not $Busy
-    $open.Enabled=-not $Busy
-    $cancel.Enabled=$Busy -and ($null -eq $script:AdminProc)
+    $script:start.Enabled=-not $Busy
+    $script:open.Enabled=-not $Busy
+    $script:cancel.Enabled=$Busy -and ($null -eq $script:AdminProc)
     $ui=Get-PCADReportUiState -Report $script:LastReport -ExitCode $script:LastExitCode
-    $preview.Enabled=(-not $Busy) -and $ui.CanPreview
-    $apply.Enabled=(-not $Busy) -and ($null -eq $script:AdminProc) -and $ui.CanApply -and
+    $script:preview.Enabled=(-not $Busy) -and $ui.CanPreview
+    $script:apply.Enabled=(-not $Busy) -and ($null -eq $script:AdminProc) -and $ui.CanApply -and
         (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'ParcheCAD.Reglas.ps1') -PathType Leaf)
-    $rollback.Enabled=(-not $Busy) -and (Test-Path -LiteralPath (Join-Path $script:Reports 'operaciones') -PathType Container)
+    $script:rollback.Enabled=(-not $Busy) -and (Test-Path -LiteralPath (Join-Path $script:Reports 'operaciones') -PathType Container)
 }
 function PCAD-ReadLog([string]$File) {
     try {if(Test-Path -LiteralPath $File -PathType Leaf) {return (Get-Content -LiteralPath $File -ErrorAction Stop) -join [Environment]::NewLine}}
@@ -89,7 +94,23 @@ function PCAD-Finish {
     $p=$script:Proc
     if($null -eq $p){return}
     $script:Proc=$null
-    $p.Refresh();$code=$p.ExitCode;$p.Dispose()
+    # ExitCode of Start-Process -PassThru is not consistently readable in
+    # Windows PowerShell 5.1. The child writes a completion marker only after
+    # persisting its JSON; absent, damaged or contradictory marker => PARTIAL.
+    $p.Refresh()
+    $nativeCode=$null
+    try {$nativeCode=$p.ExitCode} catch {}
+    $p.Dispose()
+    $code=2
+    if($script:ExitMarker -and (Test-Path -LiteralPath $script:ExitMarker -PathType Leaf)){
+        try {
+            $text=(Get-Content -LiteralPath $script:ExitMarker -Raw -ErrorAction Stop).Trim()
+            if($text -cin @('0','2')){
+                $code=[int]$text
+                if($null -ne $nativeCode -and [int]$nativeCode -ne $code){$code=2}
+            }
+        } catch {$code=2}
+    }
     $script:LastExitCode=$code
     PCAD-Busy $false
     $bar.Style='Continuous';$bar.Value=100
@@ -137,9 +158,9 @@ function PCAD-Finish {
     if($network.Count -gt 0 -and $null -ne $network[0]) {
         $lines.Add(('Atribucion F3: {0} WebView2 observados, {1} AutoCAD probable(s), aislamiento NO VERIFICADO' -f $network[0].TotalWebView2,$network[0].ProbableAutoCAD))
     }
-    $preview=@(Get-PCADReportRows -Object $ui.Sections -Name 'PolicyPreview')
-    if($preview.Count -gt 0 -and $null -ne $preview[0]) {
-        $lines.Add(('Vista previa F4: {0} reglas candidatas, {1} conflictos, {2} excluidos; NINGUNA regla aplicada' -f $preview[0].Count,$preview[0].Conflicts,@($preview[0].Excluded).Count))
+    $planRows=@(Get-PCADReportRows -Object $ui.Sections -Name 'PolicyPreview')
+    if($planRows.Count -gt 0 -and $null -ne $planRows[0]) {
+        $lines.Add(('Vista previa F4: {0} reglas candidatas, {1} conflictos, {2} excluidos; NINGUNA regla aplicada' -f $planRows[0].Count,$planRows[0].Conflicts,@($planRows[0].Excluded).Count))
     }
     foreach($c in $ui.Checks){
         $cSection=Get-PCADReportField -Object $c -Name 'Section'
@@ -200,7 +221,8 @@ function PCAD-Begin {
         New-Item -ItemType Directory -Path $script:RunRoot -ErrorAction Stop | Out-Null
         $script:LogOut=Join-Path $script:RunRoot 'salida.log'
         $script:LogErr=Join-Path $script:RunRoot 'errores.log'
-        $arguments='-NoLogo -NoProfile -ExecutionPolicy RemoteSigned -File "{0}" -OutputDirectory "{1}"' -f $script:Runner,$script:RunRoot
+        $script:ExitMarker=Join-Path $script:RunRoot 'diagnostico.exitcode'
+        $arguments='-NoLogo -NoProfile -ExecutionPolicy RemoteSigned -File "{0}" -OutputDirectory "{1}" -WriteExitMarker' -f $script:Runner,$script:RunRoot
         $script:Proc=Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList $arguments -WindowStyle Hidden -RedirectStandardOutput $script:LogOut -RedirectStandardError $script:LogErr -PassThru -ErrorAction Stop
         $script:Started=Get-Date
         PCAD-Busy $true
@@ -273,7 +295,7 @@ $open.Add_Click({
 })
 $cancel.Add_Click({
     if($null -eq $script:Proc){return}
-    if([Windows.Forms.MessageBox]::Show('Cancelar consulta? No se modifica Windows.','ParcheCAD','YesNo','Question') -ne 'Yes'){return}
+    if(!$InteractionSelfTest -and [Windows.Forms.MessageBox]::Show('Cancelar consulta? No se modifica Windows.','ParcheCAD','YesNo','Question') -ne 'Yes'){return}
     $timer.Stop()
     try{$script:Proc.Refresh();if(!$script:Proc.HasExited){$script:Proc.Kill()}}catch{}
     try{$script:Proc.Dispose()}catch{}
@@ -292,7 +314,83 @@ $form.Add_FormClosing({
         try{$script:Proc.Dispose()}catch{}
     }
 })
-$form.Add_Shown({PCAD-Begin})
+$form.Add_Shown({if(!$InteractionSelfTest){PCAD-Begin}})
+if($InteractionSelfTest){
+    # F9 CI: WinForms EVENT integration without requiring a desktop session.
+    # GitHub-hosted Windows actions are not guaranteed to expose an interactive
+    # desktop. OnClick reflection dispatches the same registered button handlers.
+    # The real diagnostic child is read-only; dummy child processes simulate
+    # Cancel and administrative-close lifecycle, with zero firewall writes.
+    $createdRunRoot=''
+    $binding=[Reflection.BindingFlags]::Instance -bor [Reflection.BindingFlags]::NonPublic
+    function Invoke-PCADClick([Windows.Forms.Button]$Button){
+        $onClick=$Button.GetType().GetMethod('OnClick',$binding)
+        if($null -eq $onClick){throw 'F9: cannot resolve button OnClick handler'}
+        $null=$onClick.Invoke($Button,[object[]]@([EventArgs]::Empty))
+    }
+    try {
+        if($apply.Enabled -or !$start.Enabled){throw 'F9: initial action state unsafe'}
+        Write-Host 'F9: dispatch Analyze handler without displaying a desktop window.'
+        Invoke-PCADClick -Button $start
+        if($null -eq $script:Proc -or !$cancel.Enabled -or $apply.Enabled){throw 'F9: Analyze did not start read-only child'}
+        $createdRunRoot=$script:RunRoot
+        if(!$script:Proc.WaitForExit(65000)){throw 'F9: read-only diagnostic child exceeded 65 seconds'}
+        PCAD-Finish
+        if($null -eq $script:LastReport -or $null -eq $script:LastExitCode){
+            throw 'F9: diagnostic process finished without a readable report or completion marker'
+        }
+        $ui=Get-PCADReportUiState -Report $script:LastReport -ExitCode $script:LastExitCode
+        if(!$start.Enabled -or $cancel.Enabled -or $apply.Enabled){throw 'F9: wrong controls after read-only diagnostic on clean runner'}
+        if($status.Text -cne $ui.Description){throw 'F9: GUI header disagrees with validator'}
+        Write-Host ('F9 PASS: Analyze handler -> read-only Windows child -> report -> safe status ({0}).' -f $ui.Result)
+
+        Write-Host 'F9: dispatch Cancel handler against an owned dummy sleeping process.'
+        $script:LastReport=$null;$script:LastExitCode=$null
+        $script:Proc=Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList '-NoLogo -NoProfile -Command "Start-Sleep -Seconds 30"' -PassThru -WindowStyle Hidden -ErrorAction Stop
+        PCAD-Busy $true
+        if(!$cancel.Enabled -or $apply.Enabled){throw 'F9: cancel disabled while read-only child running'}
+        Invoke-PCADClick -Button $cancel
+        if($null -ne $script:Proc -or $cancel.Enabled -or $apply.Enabled -or $status.Text -notmatch 'CANCELADO'){
+            throw 'F9: cancel handler failed to release owned process and reset controls'
+        }
+        Write-Host 'F9 PASS: Cancel handler closed only its owned dummy child.'
+
+        Write-Host 'F9: exercise FormClosing handler against a dummy admin placeholder (no UAC).'
+        $script:AdminProc=Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList '-NoLogo -NoProfile -Command "Start-Sleep -Seconds 30"' -PassThru -WindowStyle Hidden -ErrorAction Stop
+        PCAD-Busy $true
+        if($cancel.Enabled -or $apply.Enabled -or $rollback.Enabled){throw 'F9: mutating controls enabled during simulated administration'}
+        $onFormClosing=[Windows.Forms.Form].GetMethod('OnFormClosing',$binding)
+        if($null -eq $onFormClosing){throw 'F9: cannot resolve FormClosing'}
+        $closing=[Windows.Forms.FormClosingEventArgs]::new([Windows.Forms.CloseReason]::UserClosing,$false)
+        $null=$onFormClosing.Invoke($form,[object[]]@($closing))
+        if(!$closing.Cancel){throw 'F9: FormClosing was not canceled during simulated admin process'}
+        $script:AdminProc.Refresh()
+        if(!$script:AdminProc.HasExited){$script:AdminProc.Kill()}
+        $script:AdminProc.WaitForExit(5000) | Out-Null
+        $script:AdminProc.Dispose();$script:AdminProc=$null
+        PCAD-Busy $false
+        $closing2=[Windows.Forms.FormClosingEventArgs]::new([Windows.Forms.CloseReason]::UserClosing,$false)
+        $null=$onFormClosing.Invoke($form,[object[]]@($closing2))
+        if($closing2.Cancel){throw 'F9: FormClosing stays blocked after admin placeholder ends'}
+        Write-Host 'F9 PASS: FormClosing denied with active admin placeholder, allowed after exit.'
+        Write-Host 'PASS F9: WinForms event handlers validated headlessly, UAC/visual QA remain pending.' -ForegroundColor Green
+        exit 0
+    } finally {
+        $timer.Stop()
+        foreach($name in @('Proc','AdminProc')){
+            $p=Get-Variable -Name $name -Scope Script -ValueOnly -ErrorAction SilentlyContinue
+            if($null -ne $p){
+                try {$p.Refresh();if(!$p.HasExited){$p.Kill();$p.WaitForExit(5000)|Out-Null}}catch{}
+                try {$p.Dispose()}catch{}
+                Set-Variable -Name $name -Scope Script -Value $null
+            }
+        }
+        if(!$form.IsDisposed){$form.Dispose()}
+        if($createdRunRoot -and (Test-Path -LiteralPath $createdRunRoot -PathType Container)){
+            Remove-Item -LiteralPath $createdRunRoot -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
 if($SelfTest){
     if(!$form.Controls.Contains($preview) -or !$form.Controls.Contains($apply) -or
        !$form.Controls.Contains($rollback) -or $apply.Enabled -or $rollback.Enabled){throw 'GUI selftest: controls missing or dangerous startup state'}
