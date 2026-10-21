@@ -10,7 +10,7 @@ function Test-PCADAdministrator {
     } catch {return $false}
 }
 function Assert-PCADManagedEntry {
-    param($Entry)
+    param($Entry,[switch]$AllowMissingFile)
     if($null -eq $Entry){throw 'Falta entrada de regla.'}
     $program=Get-PCADCanonicalProgram -Path ([string]$Entry.Program)
     $year=[int]$Entry.Year
@@ -22,9 +22,11 @@ function Assert-PCADManagedEntry {
         [string]$Entry.Action -cne 'Block' -or [string]$Entry.Profile -cne 'Any') {
         throw 'Parametros de regla fuera de politica.'
     }
-    if(!(Test-Path -LiteralPath $program -PathType Leaf)) {throw 'Archivo de AutoCAD no existe.'}
-    $file=Get-Item -LiteralPath $program -Force -ErrorAction Stop
-    if(($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {throw 'No se aceptan ejecutables enlace.'}
+    if(!$AllowMissingFile -or (Test-Path -LiteralPath $program -PathType Leaf)) {
+        if(!(Test-Path -LiteralPath $program -PathType Leaf)) {throw 'Archivo de AutoCAD no existe.'}
+        $file=Get-Item -LiteralPath $program -Force -ErrorAction Stop
+        if(($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {throw 'No se aceptan ejecutables enlace.'}
+    }
     if([string]$file.Name -ieq 'msedgewebview2.exe') {throw 'El runtime WebView2 compartido no es elegible.'}
     return $program
 }
@@ -55,7 +57,8 @@ function Invoke-PCADRollbackRules {
     foreach($entry in @($journal.Operations)){
         if([string]$entry.State -notin @('CREATING','CREATED','ROLLBACK_ERROR')){continue}
         try{
-            $null=Assert-PCADManagedEntry -Entry $entry
+            # Revertir tambien despues de desinstalar AutoCAD: la regla puede quedar huerfana.
+            $null=Assert-PCADManagedEntry -Entry $entry -AllowMissingFile
             $before=Get-PCADActualRuleStatus -RuleName ([string]$entry.RuleName) -Program ([string]$entry.Program)
             if($before.State -eq 'EXISTS_VALID') {
                 Remove-NetFirewallRule -Name ([string]$entry.RuleName) -PolicyStore PersistentStore -ErrorAction Stop
