@@ -1,5 +1,5 @@
 # SPEC MAESTRA — ParcheCAD 4.0
-**Estado:** F0 pendiente · **Repositorio:** sierraglobalcompany-v3/Autocad-Patch-Webview2 · **Fecha:** 2026-10-20
+**Estado:** F0–F4 implementadas, F5 QA integrada en curso, no RC ni release · **Repositorio:** sierraglobalcompany-v3/Autocad-Patch-Webview2 · **Fecha:** 2026-10-20
 
 ## Objetivo y definiciones de éxito
 Inventariar AutoCAD 2023–2027, sus ejecutables y servicios, procesos WebView2, reglas de firewall y conexiones. Evaluar aislamiento de conexiones de Autodesk, aceptando pérdida de funciones en línea, sin afectar WebView2 de WhatsApp/Outlook.
@@ -52,4 +52,15 @@ Nunca deshabilitar AVG/Defender, añadir exclusiones, evadir alertas, eliminar l
 - https://learn.microsoft.com/en-us/sysinternals/downloads/tcpview
 - https://www.autodesk.com/support/technical/article/caas/sfdcarticles/sfdcarticles/Several-Microsoft-Edge-WebView2-instances-interfere-with-AutoCAD-applications.html
 
-**NEXT: issue #1 — F0 diagnóstico 2023–2027, sin modificaciones de sistema.**
+
+## F5 — reglas de integracion y privacidad (2026-10-21)
+
+- La detección conserva rutas reales **solo en memoria y durante operaciones autorizadas**. Los informes JSON/TXT y la vista previa pública sanea rutas de perfiles de Windows.
+- La ruta del EXE se contrasta contra la raíz de instalación real: no suponer que toda instalación está bajo `C:\Program Files\Autodesk\AutoCAD 20XX`.
+- La política reversible guarda esa raíz en el journal privado. Una regla propia puede revertirse aun si el EXE desaparece, pero un identificador ajeno nunca autoriza eliminación automática.
+- La revisión de manifests solo muestra **registros históricos**, no existencia ni eficacia comprobada de reglas. `CREATING`, `ROLLBACK_ERROR` y archivos inválidos deben marcar revisión pendiente.
+- La GUI solo habilita acciones cuando el diagnóstico ha finalizado sin errores y el plan está sin conflictos. UAC y confirmación adicional por cada modificación.
+- QA alcanzada: PowerShell 5.1/7, fixtures F0–F5, autoinicialización WinForms y reglas reales temporales en Windows efímero. No reemplaza prueba de AutoCAD instalado, QA visual interactiva ni validación WebView2.
+- Documento de referencia y puertas: `docs/F5_INTEGRACION_RECUPERACION_QA.md`.
+
+**NEXT: cierre F5/RC1 — QA gráfica interactiva, recuperaciones en interrupciones reales, detección en AutoCAD instalado y declaración honesta de cobertura. PRs Draft; no merge ni release.**
