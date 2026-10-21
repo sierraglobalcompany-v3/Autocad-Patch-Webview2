@@ -1,4 +1,4 @@
-name: ParcheCAD Windows QA (F0-F8)
+name: ParcheCAD Windows QA (F0-F9)
 on:
   pull_request:
   push:
@@ -37,6 +37,13 @@ jobs:
           $ErrorActionPreference='Stop'
           & "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -STA -File .\src\ParcheCAD.Panel.ps1 -SelfTest
           if($LASTEXITCODE -ne 0) { throw "WinForms selftest error $LASTEXITCODE" }
+      - name: F9 STA WinForms live buttons and cancel/close smoke (no UAC)
+        shell: powershell
+        timeout-minutes: 4
+        run: |
+          $ErrorActionPreference='Stop'
+          & "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -STA -File .\src\ParcheCAD.Panel.ps1 -InteractionSelfTest
+          if($LASTEXITCODE -ne 0) { throw "F9 WinForms interaction test failed: $LASTEXITCODE" }
       - name: Firewall preview smoke (read-only, no AutoCAD)
         shell: powershell
         timeout-minutes: 4
