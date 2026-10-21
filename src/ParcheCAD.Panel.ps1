@@ -318,7 +318,13 @@ if($InteractionSelfTest){
         $createdRunRoot=$script:RunRoot
         if(!$script:Proc.WaitForExit(65000)){throw 'F9: read-only diagnostic child exceeded 65 seconds'}
         PCAD-Finish
-        if($null -eq $script:LastReport -or $null -eq $script:LastExitCode){throw 'F9: no report or exit code'}
+        if($null -eq $script:LastReport -or $null -eq $script:LastExitCode){
+            Write-Host ('F9 diagnostic subprocess exit: {0}' -f $script:LastExitCode)
+            Write-Host ('F9 diagnostic status: {0}' -f $status.Text)
+            Write-Host ('F9 diagnostic stderr: {0}' -f (PCAD-ReadLog $script:LogErr))
+            Write-Host ('F9 diagnostic stdout: {0}' -f (PCAD-ReadLog $script:LogOut))
+            throw 'F9: no report or exit code'
+        }
         $ui=Get-PCADReportUiState -Report $script:LastReport -ExitCode $script:LastExitCode
         if(!$start.Enabled -or $cancel.Enabled -or $apply.Enabled){throw 'F9: wrong controls after read-only diagnostic on clean runner'}
         if($status.Text -cne $ui.Description){throw 'F9: GUI header disagrees with validator'}
