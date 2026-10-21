@@ -68,7 +68,7 @@ function Get-PCADReportUiState {
         [int](Get-PCADReportField -Object $Report -Name 'SchemaVersion') -eq 1 -and
         (Get-PCADReportField -Object $Report -Name 'ReadOnly') -eq $true)
     $exitOK=($null -ne $ExitCode -and [int]$ExitCode -eq 0)
-    $complete=($exitOK -and $schemaOK -and $checksOK -and
+    $complete=($exitOK -and $schemaOK -and $checksOK -and $recoveryOK -and
         $result -ceq 'DIAGNOSTICO_COMPLETADO_SIN_CAMBIOS')
 
     return [pscustomobject]@{
