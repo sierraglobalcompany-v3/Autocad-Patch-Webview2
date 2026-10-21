@@ -21,6 +21,13 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           & .\src\ParcheCAD.Diagnostico.ps1 -NoExport
+      - name: WinForms construction and control safety smoke (no UI interaction)
+        shell: powershell
+        timeout-minutes: 3
+        run: |
+          $ErrorActionPreference='Stop'
+          & "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -STA -File .\src\ParcheCAD.Panel.ps1 -SelfTest
+          if($LASTEXITCODE -ne 0) { throw "WinForms selftest error $LASTEXITCODE" }
       - name: Firewall preview smoke (read-only, no AutoCAD)
         shell: powershell
         timeout-minutes: 4
