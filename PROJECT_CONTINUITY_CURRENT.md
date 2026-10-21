@@ -3,7 +3,7 @@
 **Actualizado:** 2026-10-21. **Estado:** F0–F17 (F17 protocolo LAB read-only, sin prueba AutoCAD) desarrolladas en PRs Draft; **SIN RC1 / RELEASE / DEPLOY / MERGE**.  
 **Repositorio fuente única:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2  
 **Rama vigente:** `fix/f17-integrated-qa-protocol` · **PR #19 Draft**, apilado sobre #18→#17→#16→#15→#14→#13→#12→#11→#10→#9→#8→#7→#6→#5→#4→#3. **`main` aún no tiene estas fases.**  
-**CI F17 anterior al refinamiento:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39557943813 (#136, 4/4 SUCCESS). Revisar siempre CI del HEAD final del PR #19 antes de certificar nuevos cambios. La certificación con AutoCAD real sigue pendiente. No confundir con certificación AutoCAD. Verificar CI sobre último HEAD tras commits de docs.
+**CI F17 anterior a los nuevos tests de reconstrucción:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39558864681 (#137, 4/4 SUCCESS). Revisar siempre CI del HEAD final del PR #19 antes de certificar nuevos cambios. La certificación con AutoCAD real sigue pendiente. No confundir con certificación AutoCAD. Verificar CI sobre último HEAD tras commits de docs.
 
 ## Objetivo del usuario y límites no negociables
 
@@ -40,7 +40,7 @@ El usuario quiere impedir la conectividad saliente de **AutoCAD 2023–2027 y to
 | F14 | Inventario acotado de Autodesk compartido y advertencias de profundidad/cantidad, sin bloqueo automático | CI #117 PASS |
 | F15 | Validación de rutas: sin junction/symlink en plan y Apply, avisos de catálogo parcial | CI #124 PASS |
 | F16 | Fallo seguro ante filtros NetSecurity restringidos | CI #133, 4/4 PASS |
-| F17 | QA integrada solo lectura; captura temporal+hash antes/después, matriz F12 | CI #136 base PASS; último HEAD por confirmar |
+| F17 | QA integrada solo lectura; captura temporal+hash antes/después, matriz F12 | CI #137 PASS antes del smoke de reconstrucción; nuevo HEAD por confirmar |
 
 ### F12 — evaluación RC1 disponible
 
@@ -110,5 +110,6 @@ Clonar exactamente la **rama F17**, leer `PROJECT_CONTINUITY_CURRENT.md` + `docs
 - Rama `fix/f17-integrated-qa-protocol` apilada sobre F16, sin merge, release ni pruebas con AutoCAD real.
 - `tools/Invoke-ParcheCADF17.ps1`: solo lectura; `Before`, `After` y `Evaluate`, con carpetas distintas y bloqueo de sobrescritura; reutiliza F0 y F12; exige GeneratedAt posterior y SHA256 distinto (no certifica mismo equipo), no aplica firewall ni aprueba RC1.
 - `docs/F17_PROTOCOLO_QA_INTEGRADA.md`: sesión única de laboratorio, evidencia TCP/UDP IPv4/IPv6, servicios, WebView2 compartido, GUI/UAC, AVG y reinicio/rollback.
-- `tests/F17.Session.Tests.ps1`: fixtures de evaluación de 10 puertas y rechazo fail-closed. CI #136 del HEAD anterior verde; revalidar HEAD actual tras integridad temporal y antirreplay.
-- **NEXT:** verificar CI y ejecutar sesión única solo cuando exista VM Windows con AutoCAD legítimo; RC1 sigue BLOCKED.
+- `tests/F17.Session.Tests.ps1`: fixtures de evaluación de 10 puertas y rechazo fail-closed. CI #137 del HEAD anterior verde; revalidar HEAD tras tests PS7, smoke Windows Before/After/Evaluate y ZIP F17 extraído.
+- **QA de reconstrucción adicional:** `tests/F17.RealWindows.Integration.ps1` en Windows efímero verifica las tres operaciones read-only, y `tests/F6.Package.Tests.ps1` ejecuta F17 desde ZIP extraído con informes sintéticos; F17 fixtures también en PS7. Sin AutoCAD real y sin RC1.
+- **NEXT:** verificar CI del HEAD final y ejecutar sesión única LAB solo cuando exista VM Windows con AutoCAD legítimo; RC1 sigue BLOCKED.

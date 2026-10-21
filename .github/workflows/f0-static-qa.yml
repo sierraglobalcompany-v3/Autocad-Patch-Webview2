@@ -41,6 +41,12 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           & .\tests\F12.RealWindows.Integration.ps1
+      - name: F17 Before/After/Evaluate on clean ephemeral Windows (read-only, NO AutoCAD)
+        shell: powershell
+        timeout-minutes: 6
+        run: |
+          $ErrorActionPreference='Stop'
+          & .\tests\F17.RealWindows.Integration.ps1
       - name: WinForms construction and control safety smoke (no UI interaction)
         shell: powershell
         timeout-minutes: 3
@@ -79,6 +85,7 @@ jobs:
           & .\tests\F12.RCGates.Tests.ps1
           & .\tests\F14.SharedCatalog.Tests.ps1
           & .\tests\F15.ReparseGuard.Tests.ps1
+          & .\tests\F17.Session.Tests.ps1
 
   f4-real-firewall-ephemeral:
     # Strictly hosted throwaway Windows VM; fixture is a copy of whoami.exe in TEMP.

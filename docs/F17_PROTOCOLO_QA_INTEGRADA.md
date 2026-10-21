@@ -55,6 +55,13 @@ Preparar **una unica sesion documentada y reproducible** en VM Windows con escri
 
 **No subir a GitHub:** trazas ETL/PCAP, direcciones IP, hostnames, identificadores de licencias, numeros de serie, PID vinculados a usuarios, contrasenas, credenciales, rutas personales, journals con Program real, capturas de terceros. Conservar originales cifrados o en carpeta privada local con control de acceso; publicar unicamente matriz redactada de hallazgos sin datos sensibles. F17_MATRIZ_EVIDENCIA.json es un checklist, no una afirmacion de haber ensayado trafico. Flags ContentsDistinctVerified/ TimestampOrderVerified documentan solo el formato y orden; SameMachineVerified=false sin certificacion manual.
 
+## Prueba de reconstruccion CI (sin AutoCAD)
+
+- El workflow ejecuta los fixtures F17 tanto en Windows PowerShell 5.1 como en PowerShell 7.
+- Un smoke aislado y read-only crea capturas nuevas Before y After y la evaluacion F12/F17 en Windows de GitHub. No hay AutoCAD instalado y no hay prueba de las puertas de red/GUI/UAC reales.
+- F6 extrae el ZIP DEV allowlist, verifica SHA256 y ejecuta Invoke-ParcheCADF17.ps1 **desde el ZIP** contra dos informes sinteticos. El resultado obligatorio es BLOCKED con diez puertas. Los tests no se incluyen en el ZIP de distribucion DEV y permanecen reproducibles en GitHub.
+- CI en verde demuestra que el software puede reconstruirse y ejecutarse en un Windows efimero; **no** demuestra funcionamiento con AutoCAD genuino.
+
 ## Resultados que permiten cerrar F17
 
 - **F17 PREPARADO:** script, guia, tests PS 5.1/7, ZIP DEV reproducible y CI asociado al HEAD final verdes.
