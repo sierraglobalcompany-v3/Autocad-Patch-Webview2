@@ -119,7 +119,8 @@ function PCAD-ReadLog([string]$File) {
     return ''
 }
 function PCAD-Finish {
-    $timer.Stop()
+    # Diagnostic completion must not stop polling the independent monitor.
+    if($null -eq $script:MonitorProc){$timer.Stop()}
     $p=$script:Proc
     if($null -eq $p){return}
     $script:Proc=$null
@@ -488,7 +489,19 @@ if($InteractionSelfTest){
         if($null -eq $script:Proc -or !$cancel.Enabled -or $apply.Enabled){throw 'F9: Analyze did not start read-only child'}
         $createdRunRoot=$script:RunRoot
         if(!$script:Proc.WaitForExit(65000)){throw 'F9: read-only diagnostic child exceeded 65 seconds'}
+        # Regression: a running observation child must survive F0 completion,
+        # and the WinForms timer must remain enabled to report its final log.
+        $monitorFixture=Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList '-NoLogo -NoProfile -Command "Start-Sleep -Seconds 30"' -PassThru -WindowStyle Hidden -ErrorAction Stop
+        $script:MonitorProc=$monitorFixture
         PCAD-Finish
+        if(!$timer.Enabled -or $null -eq $script:MonitorProc){
+            throw 'Monitor F17: diagnostic completion incorrectly stopped observation UI.'
+        }
+        $monitorFixture.Refresh()
+        if(!$monitorFixture.HasExited){$monitorFixture.Kill();$monitorFixture.WaitForExit(5000)|Out-Null}
+        $monitorFixture.Dispose();$script:MonitorProc=$null
+        $timer.Stop()
+        PCAD-Busy $false
         if($null -eq $script:LastReport -or $null -eq $script:LastExitCode){
             throw 'F9: diagnostic process finished without a readable report or completion marker'
         }
@@ -557,7 +570,7 @@ if($InteractionSelfTest){
         exit 0
     } finally {
         $timer.Stop()
-        foreach($name in @('Proc','AdminProc')){
+        foreach($name in @('Proc','AdminProc','MonitorProc')){
             $p=Get-Variable -Name $name -Scope Script -ValueOnly -ErrorAction SilentlyContinue
             if($null -ne $p){
                 try {$p.Refresh();if(!$p.HasExited){$p.Kill();$p.WaitForExit(5000)|Out-Null}}catch{}
