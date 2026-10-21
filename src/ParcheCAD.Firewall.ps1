@@ -125,6 +125,8 @@ function Invoke-PCADApplyPlan {
             if($state.State -ne 'MISSING'){throw ('Regla cambio antes de aplicar: '+$e.RuleName)}
             $e.State='CREATING'
             Write-PCADJournal -Journal $journal -File $journalPath
+            $stage='PRE_RULE_PATH_RECHECK'
+            $null=Assert-PCADManagedEntry -Entry $e
             $stage='NEW_NETFIREWALL_RULE'
             New-NetFirewallRule -Name $e.RuleName -DisplayName $e.DisplayName -Group 'PCAD4_MANAGED' -Direction Outbound -Action Block -Program $e.Program -Enabled True -Profile Any -PolicyStore PersistentStore -ErrorAction Stop | Out-Null
             # Registrar incluso si la validacion posterior falla, para poder revertir.

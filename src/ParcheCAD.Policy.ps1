@@ -14,6 +14,34 @@ function Get-PCADCanonicalProgram {
     return $full.TrimEnd([char]'\')
 }
 
+# Path-containment is NOT physical containment when a junction/symlink
+# redirects one of the intermediate directories. Reject all existing
+# reparse components from drive root through the final executable BEFORE
+# generating or applying a block rule. The path is inspected again just
+# before New-NetFirewallRule to reduce time-of-check/time-of-use gaps.
+function Assert-PCADNoReparseComponents {
+    [CmdletBinding()]
+    param([Parameter(Mandatory=$true)][string]$Program)
+    $full=Get-PCADCanonicalProgram -Path $Program
+    $dir=$full
+    $steps=0
+    while($dir){
+        $steps++
+        if($steps -gt 64){throw 'Ruta excesivamente profunda o ciclica.'}
+        if(!(Test-Path -LiteralPath $dir)){
+            throw 'Componente de ruta inexistente; no se crea regla.'
+        }
+        $entry=Get-Item -LiteralPath $dir -Force -ErrorAction Stop
+        if(($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){
+            throw 'La ruta contiene enlace simbolico o junction; no aplicar regla.'
+        }
+        $parent=[IO.Path]::GetDirectoryName($dir.TrimEnd([char]'\'))
+        if([string]::IsNullOrWhiteSpace($parent) -or $parent -ieq $dir){break}
+        $dir=$parent
+    }
+    return $true
+}
+
 function Assert-PCADProgramInstallRoot {
     [CmdletBinding()]
     param([string]$Program,[int]$Year,[string]$InstallRoot,[switch]$AllowMissing)
@@ -23,6 +51,7 @@ function Assert-PCADProgramInstallRoot {
         if($path -notmatch ('(?i)\\AutoCAD '+$Year+'\\')) {
             throw 'Falta raiz de instalacion para una ruta personalizada.'
         }
+        if(!$AllowMissing){$null=Assert-PCADNoReparseComponents -Program $path}
         return $path
     }
     if(![IO.Path]::IsPathRooted($InstallRoot) -or $InstallRoot -match '^\\\\' -or
@@ -36,6 +65,10 @@ function Assert-PCADProgramInstallRoot {
     if(!$AllowMissing -and !(Test-Path -LiteralPath (Join-Path $root 'acad.exe') -PathType Leaf)) {
         throw 'No se comprobo acad.exe dentro de la raiz de instalacion.'
     }
+    if(!$AllowMissing){$null=Assert-PCADNoReparseComponents -Program $path}
+    # During rollback an executable or parent directory may have been moved,
+    # uninstalled or replaced. Only the exact owned firewall rule is deleted;
+    # do not refuse its recovery because a file path changed after Apply.
     return $path
 }
 function Get-PCADRuleName {

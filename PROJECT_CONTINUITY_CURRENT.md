@@ -1,9 +1,9 @@
 # PROJECT_CONTINUITY_CURRENT — ParcheCAD 4.0
 
-**Actualizado:** 2026-10-21. **Estado:** F0–F14 desarrolladas en PRs Draft; **SIN RC1 / RELEASE / DEPLOY / MERGE**.  
+**Actualizado:** 2026-10-21. **Estado:** F0–F15 desarrolladas en PRs Draft; **SIN RC1 / RELEASE / DEPLOY / MERGE**.  
 **Repositorio fuente única:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2  
-**Rama vigente:** `feat/f14-shared-autodesk-inventory` · **PR #16 Draft**, apilado sobre #15→#14→#13→#12→#11→#10→#9→#8→#7→#6→#5→#4→#3. **`main` aún no tiene estas fases.**  
-**CI F14 verificado:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39549747614 — run **#114, 4/4 PASS**; incluye inventario compartido y TCP IPv4 sintético. La certificación con AutoCAD real sigue pendiente. No confundir con certificación AutoCAD. Verificar CI sobre último HEAD tras commits de docs.
+**Rama vigente:** `fix/f15-reparse-path-guard` · **PR #17 Draft**, apilado sobre #16→#15→#14→#13→#12→#11→#10→#9→#8→#7→#6→#5→#4→#3. **`main` aún no tiene estas fases.**  
+**CI F15 verificado:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39551110553 — run **#119, 4/4 PASS**; incluye rutas redirigidas, inventario compartido, TCP sintético y rollback. La certificación con AutoCAD real sigue pendiente. No confundir con certificación AutoCAD. Verificar CI sobre último HEAD tras commits de docs.
 
 ## Objetivo del usuario y límites no negociables
 
@@ -37,7 +37,8 @@ El usuario quiere impedir la conectividad saliente de **AutoCAD 2023–2027 y to
 | F11 | Matriz de cobertura EXE/servicios/WebView2/TCP/UDP en JSON/TXT/UI | CI #99 4/4 PASS |
 | F12 | Evaluación de diez puertas RC1 desde diagnósticos antes/después | CI #103 PASS; nunca RC1 automático |
 | F13 | Prueba TCP IPv4 real de EXE ficticio: conexión permitida → bloqueada → restaurada; otro EXE intacto | CI #109 PASS |
-| **F14** | **Inventario acotado de Autodesk compartido y advertencias de profundidad/cantidad, sin bloqueo automático** | **CI #114 PASS 4/4** |
+| F14 | Inventario acotado de Autodesk compartido y advertencias de profundidad/cantidad, sin bloqueo automático | CI #117 PASS |
+| **F15** | **Validación de todos los componentes existentes de rutas: sin junction/symlink en plan, Apply y aviso de catálogo parcial** | **CI #119 PASS 4/4** |
 
 ### F12 — evaluación RC1 disponible
 
@@ -67,9 +68,19 @@ El usuario quiere impedir la conectividad saliente de **AutoCAD 2023–2027 y to
 - **QA:** `tests/F14.SharedCatalog.Tests.ps1` en PS5.1/7; prueba de integración WinForms exige la sección/advertencia; pruebas F13 de tráfico TCP y reversión + ZIP reproducible siguen verdes. Evidencia `docs/F14_INVENTARIO_COMPARTIDO_QA.md`. CI #114: https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39549747614.
 - **Pendiente RC1:** AutoCAD real instalado, servicios compartidos en ejecución, tráfico efectivo de Autodesk, WebView2 exclusivo NO RESUELTO, sesión GUI/UAC real, AVG y reinicio completo. No requerir al usuario pruebas por fase.
 
+## F15 — último checkpoint de seguridad de rutas
+
+- **Defecto real:** una ruta que empieza por una instalación AutoCAD puede atravesar una junction o enlace simbólico intermedio y alcanzar una aplicación ajena.
+- **Corrección en el origen:** `Assert-PCADNoReparseComponents` en `src/ParcheCAD.Policy.ps1` inspecciona todos los segmentos existentes hasta la raíz de la unidad y rechaza enlaces. `Assert-PCADProgramInstallRoot` la ejecuta al planificar y preparar reglas.
+- **Segunda barrera:** `src/ParcheCAD.Firewall.ps1` repite la validación justo antes de `New-NetFirewallRule`, reduciendo el intervalo entre comprobación y uso. No prometer inmunidad absoluta a condiciones de carrera.
+- **Inventario honesto:** `Get-PCADCatalogTree` marca `PARCIAL` cuando omite carpetas o ejecutables enlazados.
+- **Rollback preservado:** la eliminación de reglas propias exactas sigue siendo posible cuando AutoCAD fue desinstalado o una carpeta cambió después de aplicar; la comprobación de propiedad de regla y grupo sigue siendo obligatoria.
+- **QA:** `tests/F15.ReparseGuard.Tests.ps1` crea junctions reales en TEMP; PS5.1/7, firewall temporal, TCP sintético y ZIP reproducible PASS. La primera ejecución evidenció fallo de limpieza de junction en PS5.1; se corrigió mediante borrado no recursivo sin tocar el destino. Evidencia: `docs/F15_REPARSE_GUARD_QA.md`; CI #119: https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39551110553.
+- **No certifica RC1:** AutoCAD real, servicios compartidos, tráfico TCP/UDP IPv6, WebView2 exclusivo, UAC/DPI, AVG y reboot sin ensayar.
+
 ## Reconstrucción desde GitHub
 
-Clonar exactamente la **rama F14**, leer `PROJECT_CONTINUITY_CURRENT.md` + `docs/SPEC_MAESTRA.md` + `docs/F12_GATE_RC1_QA_INTEGRADA.md`, ejecutar GitHub Actions y revisar 4/4 jobs. El artifact temporal `ParcheCAD_4.0_DEV_NOT_RELEASE` contiene ZIP allowlist y SHA256; **NO es instalador RC1 ni está listo para Apply en PC principal**. Ningún JSON local antiguo es necesario para reconstruir el software.
+Clonar exactamente la **rama F15**, leer `PROJECT_CONTINUITY_CURRENT.md` + `docs/SPEC_MAESTRA.md` + `docs/F12_GATE_RC1_QA_INTEGRADA.md`, ejecutar GitHub Actions y revisar 4/4 jobs. El artifact temporal `ParcheCAD_4.0_DEV_NOT_RELEASE` contiene ZIP allowlist y SHA256; **NO es instalador RC1 ni está listo para Apply en PC principal**. Ningún JSON local antiguo es necesario para reconstruir el software.
 
 ## Qué bloquea RC1
 

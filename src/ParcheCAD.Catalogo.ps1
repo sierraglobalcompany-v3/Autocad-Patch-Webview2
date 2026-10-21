@@ -52,9 +52,17 @@ function Get-PCADCatalogTree {
         $node=$stack.Pop()
         try{
             $dir=Get-Item -LiteralPath $node.Path -Force -ErrorAction Stop
-            if(($dir.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){continue}
+            if(($dir.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){
+                $partial=$true
+                [void]$warnings.Add('Raiz o carpeta enlazada omitida; inventario no exhaustivo')
+                continue
+            }
             foreach($child in @(Get-ChildItem -LiteralPath $dir.FullName -Force -ErrorAction Stop)){
-                if(($child.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){continue}
+                if(($child.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){
+                    $partial=$true
+                    [void]$warnings.Add('Enlace/junction omitido; inventario no exhaustivo')
+                    continue
+                }
                 if($child.PSIsContainer){
                     if([int]$node.Depth -ge $MaxDepth){$partial=$true}
                     else{$stack.Push([pscustomobject]@{Path=$child.FullName;Depth=([int]$node.Depth+1)})}
