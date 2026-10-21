@@ -1,5 +1,5 @@
 # SPEC MAESTRA — ParcheCAD 4.0
-**Estado:** F0–F10 en desarrollo con QA Windows y ZIP DEV reproducible, no RC ni release · **Repositorio:** sierraglobalcompany-v3/Autocad-Patch-Webview2 · **Fecha:** 2026-10-20
+**Estado:** F0–F11 en desarrollo con QA Windows y ZIP DEV reproducible, no RC ni release · **Repositorio:** sierraglobalcompany-v3/Autocad-Patch-Webview2 · **Fecha:** 2026-10-20
 
 ## Objetivo y definiciones de éxito
 Inventariar AutoCAD 2023–2027, sus ejecutables y servicios, procesos WebView2, reglas de firewall y conexiones. Evaluar aislamiento de conexiones de Autodesk, aceptando pérdida de funciones en línea, sin afectar WebView2 de WhatsApp/Outlook.
@@ -104,4 +104,14 @@ Nunca deshabilitar AVG/Defender, añadir exclusiones, evadir alertas, eliminar l
 - QA CI #90 PS5.1/7, WinForms STA por eventos, firewall temporal, recuperación de nuevo proceso, integridad de ZIP. https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39543990081
 - Evidencia y límites: `docs/F10_PROCESOS_RECUPERACION_QA.md`. No se ha verificado aislamiento exclusivo WebView2 ni tráfico total Autodesk.
 
-**NEXT: F11 — matriz de cobertura de servicios/EXE Autodesk y WebView2, después QA de escritorio Windows interactivo/UAC/reinicio. PRs Draft; no merge ni release.**
+## F11 — matriz de cobertura independiente de las reglas
+
+- `Get-PCADCoverageReport` toma datos YA INVENTARIADOS (catálogo, servicios, procesos, conexiones, plan saliente y resumen WebView2), sin crear un segundo escáner ni descargar datos.
+- `Sections.Coverage` agrega seis categorías explícitas: AUTOCAD_PRODUCTO, AUTODESK_COMPARTIDO, WEBVIEW2_COMPARTIDO, DESCONOCIDO, SERVICIOS_AUTODESK y PROCESOS_OBSERVADOS. Los nombres visibles son solo nombres base, con máximo 80 por grupo; no rutas o IP completas.
+- Se registran candidatos, reglas configuradas propias presentes/ausentes/no verificables, TCP por PID como instantánea, y endpoints UDP como puertos locales. **Regla presente ≠ tráfico comprobado bloqueado.**
+- No cambia las diez etapas ni los requisitos de `Get-PCADReportUiState` para habilitar Aplicar. El panel y los informes JSON/TXT muestran «COBERTURA NO CERTIFICADA».
+- `AllAutodeskTrafficBlockedVerified=false`, `AutoCADWebViewLaunchPreventedVerified=false`, `WebViewIsolatedFromOtherAppsVerified=false`. Sin prueba física, estas garantías negativas NO se cambian.
+- Microsoft documenta que los procesos WebView2 pueden compartir `CoreWebView2Environment` y UDF; el Firewall por ruta de programa no provee una selectividad automática por anfitrión para un mismo `msedgewebview2.exe`. No usar bloqueo global del runtime, ACL ni cambios en licencias como atajos.
+- QA fixtures PS5.1/7 y diagnóstico integrado WinForms, además de firewall temporal y ZIP reproducible. Evidencia F11: `docs/F11_MATRIZ_COBERTURA_WEBVIEW2.md`.
+
+**NEXT: F12 — protocolo de QA en VM Windows con escritorio interactivo, AutoCAD real, tráfico y UAC/reinicio; después decidir RC1. PRs Draft, sin merge ni release.**
