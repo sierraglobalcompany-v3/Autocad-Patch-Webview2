@@ -17,11 +17,11 @@ En F8 se extrajo **una única fuente de estado puro y solo lectura** en `src/Par
 5. Recuperación existente, sana, sin operaciones pendientes ni respaldos corruptos.
 6. Plan de bloqueo coherente: `PLAN_NO_APLICADO`, candidatos positivos y conflictos igual a cero.
 
-El mismo objeto de estado alimenta **texto de resultado, Vista previa y Aplicar**. Si falta una sección, hay estado parcial, error o contradicción entre JSON y proceso, no se habilita Aplicar. El CLI mantiene sus verificaciones propias y la confirmación administrativa.
+El mismo objeto de estado alimenta **texto de resultado, Vista previa y Aplicar**. Si falta una sección, hay estado parcial, error o contradicción entre JSON y proceso, no se habilita Aplicar. Un histórico de recuperación incongruente también impide mostrar **COMPLETO**, aunque las diez etapas del JSON digan OK. El CLI mantiene sus verificaciones propias y la confirmación administrativa.
 
 ## Pruebas
 
-**CI #66 — PASS 4/4:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39539739149
+**CI #73 — PASS 4/4:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39540161818
 
 - PowerShell 5.1 y 7: `tests/F8.UIState.Tests.ps1` comprueba informes sanos, inexistentes, corruptos, semánticamente incompletos, etapas duplicadas, sección de recuperación ausente, conflictos, `ReadOnly=false`, herramienta ajena, código no cero y resultado parcial contradictorio.
 - WinForms `-SelfTest` verifica que Aplicar no se active con un informe parcial, sin histórico, con recuperación pendiente o código de salida 2, y que se deshabilite durante un proceso activo.
