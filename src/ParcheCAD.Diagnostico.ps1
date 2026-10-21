@@ -53,6 +53,12 @@ foreach ($stage in $stages) {
                 $privateCatalog=@($catalog.Entries)
                 $result=@($privateCatalog | ForEach-Object {ConvertTo-PCADSafeRecord -Record $_ -PathFields @('Path','InstallationRoot')})
                 $sections['CatalogWarnings']=@($catalog.Warnings)
+                $sections['CatalogScope']=@([pscustomobject]@{
+                    ProductStatus=$catalog.Status
+                    SharedStatus=$catalog.SharedStatus
+                    SharedAutomaticBlocking=$false
+                    InventoryOnly=$true
+                })
                 if($catalog.Status -ne 'OK'){$stageStatus='PARCIAL';$stageDetail='Catalogo limitado; ver CatalogWarnings'}
                 break
             }
