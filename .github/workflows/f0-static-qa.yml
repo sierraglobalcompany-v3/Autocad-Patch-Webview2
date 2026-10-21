@@ -13,6 +13,12 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           & .\tests\F0.Tests.ps1
+      - name: Smoke F0 on clean Windows runner (read-only)
+        shell: powershell
+        timeout-minutes: 6
+        run: |
+          $ErrorActionPreference='Stop'
+          & .\src\ParcheCAD.Diagnostico.ps1 -NoExport
   powershell-7:
     runs-on: windows-2022
     steps:
