@@ -1,6 +1,6 @@
 # F11 — Matriz de cobertura AutoCAD, Autodesk y WebView2
 
-**Estado:** implementada en rama `feat/f11-matriz-cobertura`, QA automatizada pendiente de validación final. **SIN RC1 ni Release**.
+**Estado:** implementada en rama `feat/f11-matriz-cobertura`, QA automatizada y diagnósticos Windows verificados. **SIN RC1 ni Release**.
 
 ## Problema identificado
 
@@ -37,7 +37,11 @@ En todos los escenarios los campos `AllAutodeskTrafficBlockedVerified`, `AutoCAD
 
 **Conclusión de diseño:** usar PID, padre, UDF y nombre de ejecutable puede ayudar a una atribución **probable**, pero **no** crea por sí solo una regla del Firewall de Windows capaz de diferenciar dos anfitriones dentro del mismo ejecutable `msedgewebview2.exe`. Impedir la creación de WebView2 dentro de AutoCAD tampoco se consigue con un bloqueo de red. No se recomienda cambiar runtime Microsoft, su UDF, permisos globales ni licencias/instaladores Autodesk como supuesto atajo.
 
-## Pruebas requeridas antes de cerrar F11
+## Pruebas ejecutadas y puertas QA
+
+**CI #95 PASS 4/4:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39545583352 — PowerShell 5.1 y 7, WinForms con diagnóstico real no interactivo y sección Coverage comprobada, regla ficticia de firewall/reversión y ZIP SHA256 extraído.
+
+Casos comprobados:
 
 1. Fixture sin Autodesk: seis categorías con cero, sin afirmar cobertura.
 2. Fixture con EXE principales, auxiliares, servicios compartidos y WebView2: recuentos y exclusiones correctos.
@@ -50,4 +54,4 @@ En todos los escenarios los campos `AllAutodeskTrafficBlockedVerified`, `AutoCAD
 
 **NO SE HA PROBADO AutoCAD real instalado.** Falta correlación TCP/UDP IPv4/IPv6 sostenida, servicios compartidos y proxies; QA gráfica interactiva con UAC; reinicio Windows durante escritura; funcionamiento bajo AVG. **WebView2 exclusivo de AutoCAD: BLOCKED/NO RESUELTO**, no inventar capacidad de control por aplicación.
 
-**NEXT único:** completar pruebas F11 y actualizar CI/continuidad; luego evaluar un protocolo de QA real en VM con AutoCAD y GUI interactiva que no implique pruebas aisladas al usuario. Mantener PRs Draft y `main` sin merge.
+**NEXT único F12:** elaborar y ejecutar cuando exista entorno una QA integrada de AutoCAD real + Windows con GUI interactiva/UAC/reinicio; evaluar tráfico de servicios compartidos sin arriesgar WebView2 ajeno. Preparar evidencias y criterios de aceptación antes de RC1, sin pruebas fragmentadas al usuario. Mantener PRs Draft y `main` sin merge.
