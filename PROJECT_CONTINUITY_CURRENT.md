@@ -1,8 +1,8 @@
 # PROJECT_CONTINUITY_CURRENT — ParcheCAD 4.0
 
-**Fecha:** 2026-10-21 · **Estado:** desarrollo F0–F8; **SIN RC1, SIN RELEASE NI DEPLOY**.  
+**Fecha:** 2026-10-21 · **Estado:** desarrollo F0–F9; **SIN RC1, SIN RELEASE NI DEPLOY**.  
 **Repositorio único:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2  
-**Rama de trabajo actual:** `feat/f8-ui-report-safety` · **PR #10 Draft** (apilado sobre #9 → #8 → #7 → #6 → #5 → #4 → #3).  
+**Rama de trabajo actual:** `feat/f9-winforms-interaction-qa` · **PR #11 Draft** (apilado sobre #10 → #9 → #8 → #7 → #6 → #5 → #4 → #3).  
 **Main:** no fusionada con estas funcionalidades. Nunca anunciar que el código de los PR está en `main`.
 
 ## 1. Solicitud y límites que deben sobrevivir a otros chats
@@ -31,7 +31,8 @@ No afirmar que «todo Autodesk está desconectado» ni que «AutoCAD no usa WebV
 | F5 | Rutas personalizadas privadas, reportes saneados, evaluación de journal aplicado/incompleto/corrupto | CI y fixtures |
 | F6 | Fallback por DisplayIcon verificando acad.exe; recuperación de journal CREATING con regla temporal real; ZIP DEV determinista con SHA256 | **CI #49 4/4 PASS** |
 | F7 | Fail-closed cuando existen operaciones y archivos de recuperación pendientes; GUI/CLI no aplican nuevas reglas | CI #63 PASS |
-| F8 | Estado único para informes/UI, diez etapas verificadas, salida de proceso coherente y errores de lectura sin falso éxito | **CI #73 4/4 PASS** |
+| F8 | Estado único para informes/UI, diez etapas verificadas, salida de proceso coherente y errores de lectura sin falso éxito | CI #74 PASS |
+| F9 | WinForms Analizar/Cancelar/FormClosing probado por eventos, referencias estables a botones, protocolo de finalización del diagnóstico | **CI #84 4/4 PASS** |
 
 **CI #63:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39538578854 — PowerShell 5.1, PowerShell 7, integración real sobre regla temporal y construcción/extracción/verificación de ZIP. Se corrigió un fallo de manejo de campos ausentes en WinForms antes de PASS; F6 resolvió el parser DisplayIcon.
 
@@ -70,7 +71,7 @@ Historial de auditoría: `docs/F0_GUIA_USO_Y_QA.md`, `F1F2_IMPLEMENTACION_QA.md`
 
 ## 5. Política GitHub y entrega
 
-PRs apilados #3–#10 **Draft**, sin merge, deploy ni Release. CI verde **no** implica aplicación final aprobada. Todos los cambios de lógica viven en GitHub; no depender de carpetas temporales del asistente ni del PC del usuario. No incluir logs privados en PR. Los ZIP de Actions son artefactos temporales de desarrollo.
+PRs apilados #3–#11 **Draft**, sin merge, deploy ni Release. CI verde **no** implica aplicación final aprobada. Todos los cambios de lógica viven en GitHub; no depender de carpetas temporales del asistente ni del PC del usuario. No incluir logs privados en PR. Los ZIP de Actions son artefactos temporales de desarrollo.
 
 ## F7 — Checkpoint más reciente (PR #9 Draft)
 
@@ -94,6 +95,16 @@ PRs apilados #3–#10 **Draft**, sin merge, deploy ni Release. CI verde **no** i
 - **Documentos:** `docs/F8_UISTATE_QA.md`, README y SPEC actualizados. Artifact GitHub DEV no es release.
 - **BLOQUEOS:** QA escritorio interactivo/UAC, interrupción física/reinicio, AutoCAD instalado 2023–2027, medición de tráfico Autodesk compartido y objetivo WebView2 sin ejecución **NO RESUELTO**.
 
+## F9 — Último checkpoint (PR #11 Draft)
+
+- **CI #84 PASS (4/4):** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39542376065. PS5.1/7, WinForms STA con eventos, proceso hijo real de diagnóstico, Cancelar y cierre simulado, firewall temporal y ZIP reproducible.
+- **Hallazgo 1:** variable temporal `preview` ocultaba dinámicamente el botón WinForms. `PCAD-Busy` utiliza referencias de script `$script:`; colección renombrada `$planRows`.
+- **Hallazgo 2:** `Start-Process -PassThru` podía entregar `ExitCode` ilegible en Windows PowerShell 5.1. El diagnóstico admite `-WriteExitMarker` para panel y guarda `diagnostico.exitcode` al terminar la exportación, en su directorio único. Marcador ausente/inválido/contradictorio => `PARCIAL`.
+- **QA del panel:** evento Analizar → diez etapas → JSON → estado correcto; Cancelar proceso ficticio propio; FormClosing denegado durante administración ficticia y permitido después. Los eventos corren sin abrir ventana; **NO es QA visual ni UAC**.
+- **Limitación del runner:** intentar `Form.Show()` en GitHub-hosted Windows produjo timeout; se eligió dispatch de eventos sin pretender certificar escritorio gráfico real.
+- **Evidencia:** `docs/F9_WINFORMS_EVENT_QA.md`; ZIP DEV incluye este documento. PC usuario, licencias, AVG y WebView2 global intactos.
+- **BLOQUEOS RC1:** escritorio visual interactivo/DPI, UAC real, reinicio durante escritura, AutoCAD real instalado 2023–2027, atribución de WebView2 y medición de tráfico Autodesk compartido. No certificar bloqueo total.
+
 ## NEXT único
 
-**F9 — QA gráfica interactiva/decisión RC1:** validar clics, cambios de foco/DPI, UAC denegada/aceptada, cancelación y resultado administrativo sobre Windows descartable; aislar cualquier fallo en el módulo de origen y probar la recuperación tras reinicio cuando sea factible. Registrar con precisión la cobertura de Autodesk y WebView2. Mantener PRs #3–#10 Draft, sin merge ni release; no exigir pruebas fragmentadas al usuario.
+**F10 — Puertas RC1:** QA visual/UAC en VM Windows verdaderamente interactiva; recuperación ante reinicios, versiones reales AutoCAD y cobertura de servicios/red sin bloquear WebView2 ajeno. Mantener PRs #3–#11 Draft sin merge. No pedir tests por fase al usuario ni presentar RC1 sin evidencia.
