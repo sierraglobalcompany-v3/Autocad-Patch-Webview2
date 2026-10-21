@@ -75,7 +75,7 @@ try {
         $script:fakeRules.Remove([string]$Name)
     }
     $first=Invoke-PCADApplyPlan -Plan $plan -BackupDirectory $backup -Commit
-    Write-Host ('F4 diagnostic: status={0}, error={1}, created={2}, fake={3}, manifest={4}' -f $first.Status,$first.Error,$first.Created,$script:fakeRules.Count,$first.Manifest)
+    Write-Host ('F4 diagnostic: {0}' -f ($first | ConvertTo-Json -Depth 7 -Compress))
     Assert-F34 ($first.Status -eq 'APPLIED' -and $first.Created -eq 2 -and $script:fakeRules.Count -eq 2) 'F4 mocked apply'
     $secondPlan=New-PCADRulePlan -Catalog $catalog -CheckExisting
     $second=Invoke-PCADApplyPlan -Plan $secondPlan -BackupDirectory $backup -Commit
