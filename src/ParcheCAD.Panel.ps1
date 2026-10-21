@@ -230,24 +230,21 @@ function PCAD-LaunchAdmin([string]$Mode,[string]$Manifest=''){
     }
 }
 $preview.Add_Click({
-    if($null -eq $script:LastReport){return}
-    $p=@($script:LastReport.Sections.PolicyPreview)
-    if($p.Count -lt 1 -or $null -eq $p[0]){return}
+    $ui=Get-PCADReportUiState -Report $script:LastReport -ExitCode $script:LastExitCode
+    if(!$ui.CanPreview){return}
+    $p=$ui.Plan
     $nl=[Environment]::NewLine
-    $msg=('Candidatas: {0} / conflictos: {1} / excluidos: {2}' -f $p[0].Count,$p[0].Conflicts,@($p[0].Excluded).Count)+$nl+'WebView2 compartido excluido; tambien puede afectar LAN.'
+    $msg=('Candidatas: {0} / conflictos: {1} / excluidos: {2}' -f
+        (Get-PCADReportField -Object $p -Name 'Count'),
+        (Get-PCADReportField -Object $p -Name 'Conflicts'),
+        @(Get-PCADReportRows -Object $p -Name 'Excluded').Count)+$nl+'WebView2 compartido excluido; tambien puede afectar LAN.'
     [void][Windows.Forms.MessageBox]::Show($msg,'Vista previa F4')
 })
 $apply.Add_Click({
-    if($null -eq $script:LastReport -or $script:LastReport.Result -ne 'DIAGNOSTICO_COMPLETADO_SIN_CAMBIOS'){return}
-    $p=@($script:LastReport.Sections.PolicyPreview)
-    if($p.Count -ne 1 -or [int]$p[0].Count -le 0 -or [int]$p[0].Conflicts -gt 0){return}
-    if(@($script:LastReport.Checks).Count -ne 10 -or
-       @($script:LastReport.Checks|Where-Object {$_.Status -ne 'OK'}).Count -gt 0){return}
-    $history=@($script:LastReport.Sections.Historico | Where-Object {$null -ne $_})
-    if($history.Count -ne 1 -or $null -eq $history[0].Recovery -or
-       $history[0].Recovery.Status -notin @('OK','SIN_RESPALDOS') -or
-       [int]$history[0].Recovery.NeedsReview -gt 0 -or [int]$history[0].Recovery.Unverified -gt 0){return}
-    $q=('Crear hasta {0} reglas salientes para AutoCAD 2023-2027? Puede afectar LAN y funciones/licencias. NO controla WebView2 compartido. Pedira administrador y confirmacion adicional.' -f $p[0].Count)
+    $ui=Get-PCADReportUiState -Report $script:LastReport -ExitCode $script:LastExitCode
+    if($null -ne $script:Proc -or $null -ne $script:AdminProc -or !$ui.CanApply){return}
+    $q=('Crear hasta {0} reglas salientes para AutoCAD 2023-2027? Puede afectar LAN y funciones/licencias. NO controla WebView2 compartido. Pedira administrador y confirmacion adicional.' -f
+        (Get-PCADReportField -Object $ui.Plan -Name 'Count'))
     if([Windows.Forms.MessageBox]::Show($q,'Confirmar bloqueo','YesNo','Warning') -eq 'Yes'){PCAD-LaunchAdmin -Mode 'Apply'}
 })
 $rollback.Add_Click({
@@ -296,23 +293,36 @@ $form.Add_Shown({PCAD-Begin})
 if($SelfTest){
     if(!$form.Controls.Contains($preview) -or !$form.Controls.Contains($apply) -or
        !$form.Controls.Contains($rollback) -or $apply.Enabled -or $rollback.Enabled){throw 'GUI selftest: controls missing or dangerous startup state'}
+    $script:LastExitCode=0
     $script:LastReport=[pscustomobject]@{
-        Result='PARCIAL_NO_VERIFICADO'
-        Sections=[pscustomobject]@{PolicyPreview=@([pscustomobject]@{Count=2;Conflicts=0})}
+        Tool='ParcheCAD';SchemaVersion=1;ReadOnly=$true;Result='PARCIAL_NO_VERIFICADO'
+        Sections=[pscustomobject]@{
+            PolicyPreview=@([pscustomobject]@{Count=2;Conflicts=0;State='PLAN_NO_APLICADO'})
+        }
     }
     PCAD-Busy $false
     if($apply.Enabled){throw 'GUI selftest: partial diagnostics allowed apply'}
     $script:LastReport.Result='DIAGNOSTICO_COMPLETADO_SIN_CAMBIOS'
     PCAD-Busy $false
     if($apply.Enabled){throw 'GUI selftest: missing recovery evidence allowed apply'}
-    $script:LastReport | Add-Member -NotePropertyName Checks -NotePropertyValue @((1..10)|ForEach-Object{[pscustomobject]@{Status='OK'}})
-    $script:LastReport.Sections | Add-Member -NotePropertyName Historico -NotePropertyValue @([pscustomobject]@{Recovery=[pscustomobject]@{Status='PARCIAL';NeedsReview=1;Unverified=0}})
+    $stages=@('Installations','Processes','Services','Catalog','Firewall','Tasks',
+              'Historico','Connections','NetworkOverview','PolicyPreview')
+    $script:LastReport | Add-Member -NotePropertyName Checks -NotePropertyValue @($stages|ForEach-Object{
+        [pscustomobject]@{Section=$_;Status='OK'}
+    })
+    $script:LastReport.Sections | Add-Member -NotePropertyName Historico -NotePropertyValue @(
+        [pscustomobject]@{Recovery=[pscustomobject]@{Status='PARCIAL';NeedsReview=1;Unverified=0}}
+    )
     PCAD-Busy $false
     if($apply.Enabled){throw 'GUI selftest: incomplete recovery allowed apply'}
     $script:LastReport.Sections.Historico[0].Recovery.Status='OK'
     $script:LastReport.Sections.Historico[0].Recovery.NeedsReview=0
     PCAD-Busy $false
     if(!$apply.Enabled){throw 'GUI selftest: valid preview did not enable apply'}
+    $script:LastExitCode=2
+    PCAD-Busy $false
+    if($apply.Enabled){throw 'GUI selftest: nonzero child exit allowed apply'}
+    $script:LastExitCode=0
     PCAD-Busy $true
     if($apply.Enabled -or $rollback.Enabled){throw 'GUI selftest: modifications allowed while busy'}
     Write-Host 'PASS GUI: form initialized, partial diagnostics blocked, valid preview gated and busy state protected.'
