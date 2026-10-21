@@ -1,5 +1,5 @@
 # SPEC MAESTRA — ParcheCAD 4.0
-**Estado:** F0–F7 en desarrollo con QA Windows y ZIP DEV reproducible, no RC ni release · **Repositorio:** sierraglobalcompany-v3/Autocad-Patch-Webview2 · **Fecha:** 2026-10-20
+**Estado:** F0–F8 en desarrollo con QA Windows y ZIP DEV reproducible, no RC ni release · **Repositorio:** sierraglobalcompany-v3/Autocad-Patch-Webview2 · **Fecha:** 2026-10-20
 
 ## Objetivo y definiciones de éxito
 Inventariar AutoCAD 2023–2027, sus ejecutables y servicios, procesos WebView2, reglas de firewall y conexiones. Evaluar aislamiento de conexiones de Autodesk, aceptando pérdida de funciones en línea, sin afectar WebView2 de WhatsApp/Outlook.
@@ -79,4 +79,13 @@ Nunca deshabilitar AVG/Defender, añadir exclusiones, evadir alertas, eliminar l
 - Pruebas PowerShell 5.1/7, WinForms SelfTest, firewall temporal y ZIP SHA256. Ver `docs/F7_FAILCLOSED_GUI_QA.md`.
 - Esto no sustituye QA de UAC real, visual, reinicio, AutoCAD instalado ni aislamiento de WebView2.
 
-**NEXT: F8 — QA gráfica interactiva, UAC/reinicio real, AutoCAD instalado y cobertura de WebView2. PRs Draft; no merge ni release.**
+## F8 — coherencia de informe e interfaz (2026-10-21)
+
+- Una evaluación de interfaz y elegibilidad **solo lectura** (`src/ParcheCAD.UIState.ps1`) reemplaza duplicaciones de controles del panel.
+- El proceso hijo debe devolver código 0 y un JSON `Tool=ParcheCAD`, `SchemaVersion=1`, `ReadOnly=true`, resultado completo, diez etapas distintas y OK.
+- Historial sin recuperación sana, vista previa ausente/en conflicto, secciones parciales o contradicción entre código y JSON deshabilitan Aplicar.
+- WinForms anuncia COMPLETO únicamente con evidencia completa; un dato faltante no provoca una excepción ni un falso éxito.
+- QA Windows PS5.1/7, ZIP reconstruido, AutoCAD temporal ficticio, WinForms SelfTest y suites de reportes corruptos/contradictorios. **CI #66 PASS 4/4:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39539739149
+- Aun no existe QA visual interactiva, UAC real, AutoCAD 2023–2027 instalado ni aislamiento exclusivo probado de WebView2. Ver `docs/F8_UISTATE_QA.md`.
+
+**NEXT: F9 — QA de interacción gráfica/UAC, reinicio real, AutoCAD instalado y cobertura de WebView2. PRs Draft; no merge ni release.**
