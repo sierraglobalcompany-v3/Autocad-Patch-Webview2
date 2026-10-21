@@ -1,5 +1,5 @@
 # SPEC MAESTRA — ParcheCAD 4.0
-**Estado:** F0–F8 en desarrollo con QA Windows y ZIP DEV reproducible, no RC ni release · **Repositorio:** sierraglobalcompany-v3/Autocad-Patch-Webview2 · **Fecha:** 2026-10-20
+**Estado:** F0–F9 en desarrollo con QA Windows y ZIP DEV reproducible, no RC ni release · **Repositorio:** sierraglobalcompany-v3/Autocad-Patch-Webview2 · **Fecha:** 2026-10-20
 
 ## Objetivo y definiciones de éxito
 Inventariar AutoCAD 2023–2027, sus ejecutables y servicios, procesos WebView2, reglas de firewall y conexiones. Evaluar aislamiento de conexiones de Autodesk, aceptando pérdida de funciones en línea, sin afectar WebView2 de WhatsApp/Outlook.
@@ -88,4 +88,12 @@ Nunca deshabilitar AVG/Defender, añadir exclusiones, evadir alertas, eliminar l
 - QA Windows PS5.1/7, ZIP reconstruido, AutoCAD temporal ficticio, WinForms SelfTest y suites de reportes corruptos/contradictorios. **CI #73 PASS 4/4:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39540161818
 - Aun no existe QA visual interactiva, UAC real, AutoCAD 2023–2027 instalado ni aislamiento exclusivo probado de WebView2. Ver `docs/F8_UISTATE_QA.md`.
 
-**NEXT: F9 — QA de interacción gráfica/UAC, reinicio real, AutoCAD instalado y cobertura de WebView2. PRs Draft; no merge ni release.**
+## F9 — eventos WinForms y finalización fiable de proceso hijo
+
+- `PCAD-Busy` referencia botones por ámbito explícito `$script:`; no debe confundir el botón de Vista previa con una colección temporal del informe.
+- El diagnóstico ejecutado por el panel dispone de protocolo de finalización dentro del directorio de informe único: `diagnostico.exitcode` se escribe exclusivamente cuando se solicita `-WriteExitMarker` y se concluye la exportación. Si está ausente/inválido o difiere del resultado nativo conocido, declarar estado parcial. No rebajar invariantes F8.
+- Prueba F9 con formulario WinForms STA en GitHub-hosted Windows: despacha eventos reales del control **sin abrir la ventana**, valida Analizar→proceso hijo→JSON, Cancelar proceso propio y FormClosing con proceso administrativo ficticio. No UAC real.
+- Un runner GitHub Actions puede no disponer de escritorio interactivo; no confundir tests de eventos con auditoría visual/UAC. Evidencia CI #84 (4/4 PASS): https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39542376065
+- Documento de evidencia: `docs/F9_WINFORMS_EVENT_QA.md`. El código del panel no aplica reglas al inicio y WebView2 compartido permanece excluido.
+
+**NEXT: F10 — QA visual/UAC en Windows interactivo aislado, reinicio y cobertura real AutoCAD/WebView2. PRs Draft; no merge ni release.**
