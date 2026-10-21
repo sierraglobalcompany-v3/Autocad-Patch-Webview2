@@ -4,6 +4,8 @@ param([string]$OutputDirectory='',[switch]$NoExport)
 Set-StrictMode -Version 2.0
 $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot 'ParcheCAD.Core.ps1')
+. (Join-Path $PSScriptRoot 'ParcheCAD.Catalogo.ps1')
+. (Join-Path $PSScriptRoot 'ParcheCAD.Historico.ps1')
 
 $started=Get-Date
 $sections=[ordered]@{}
@@ -12,8 +14,10 @@ $stages=@(
     @{Key='Installations';Label='AutoCAD 2023-2027'},
     @{Key='Processes';Label='Procesos AutoCAD y WebView2'},
     @{Key='Services';Label='Servicios Autodesk'},
+    @{Key='Catalog';Label='Catalogo de ejecutables por version'},
     @{Key='Firewall';Label='Reglas heredadas y activas'},
     @{Key='Tasks';Label='Tareas programadas'},
+    @{Key='Historico';Label='Resumen de bloqueos anteriores'},
     @{Key='Connections';Label='Conexiones TCP y endpoints UDP'}
 )
 $i=0
@@ -24,20 +28,30 @@ foreach ($stage in $stages) {
     $t=Get-Date
     try {
         $result=@()
+        $stageStatus='OK';$stageDetail=''
         switch ($key) {
             Installations {$result=@(Get-PCADInstallations);break}
             Processes {$result=@(Get-PCADProcesses);break}
             Services {$result=@(Get-PCADServices);break}
+            Catalog {
+                $catalog=Get-PCADExecutableCatalog -Installations @($sections['Installations']) -Services @($sections['Services'])
+                $result=@($catalog.Entries)
+                $sections['CatalogWarnings']=@($catalog.Warnings)
+                if($catalog.Status -ne 'OK'){$stageStatus='PARCIAL';$stageDetail='Catalogo limitado; ver CatalogWarnings'}
+                break
+            }
             Firewall {$result=@(Get-PCADFirewall);break}
             Tasks {$result=@(Get-PCADTasks);break}
+            Historico {$result=@(Get-PCADLegacyOverview -Firewall @($sections['Firewall']) -Tasks @($sections['Tasks']));break}
             Connections {$result=@(Get-PCADConnections -Processes @($sections['Processes']));break}
         }
         $sections[$key]=@($result)
         [void]$checks.Add([pscustomobject]@{
-            Section=$key;Status='OK';Count=@($result).Count
-            Seconds=[math]::Round(((Get-Date)-$t).TotalSeconds,2);Detail=''
+            Section=$key;Status=$stageStatus;Count=@($result).Count
+            Seconds=[math]::Round(((Get-Date)-$t).TotalSeconds,2);Detail=$stageDetail
         })
-        Write-Host ('  OK: {0} elementos' -f @($result).Count) -ForegroundColor Green
+        if($stageStatus -eq 'OK') { Write-Host ('  OK: {0} elementos' -f @($result).Count) -ForegroundColor Green }
+        else { Write-Host ('  PARCIAL: {0} elementos. {1}' -f @($result).Count,$stageDetail) -ForegroundColor Yellow }
     } catch {
         $sections[$key]=@()
         $errorType=$_.Exception.GetType().Name

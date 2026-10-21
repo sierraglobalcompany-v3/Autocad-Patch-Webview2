@@ -10,7 +10,17 @@ Control/diagnóstico de conectividad AutoCAD 2023–2027 y estudio de WebView2 c
 - **F0 static QA:** PASS en Windows PowerShell 5.1 y PowerShell 7. Workflow `F0 static QA` ejecución #3, SHA `3d86242f88028c8e8d36ce469f18550d0ee5b64a`.
 - **F0 smoke QA:** PASS en Windows Server 2022 de GitHub-hosted runner sin AutoCAD: seis secciones completadas, cero modificaciones, código de salida 0. Resultado: 0 instalaciones, 0 procesos, 0 servicios, 1 regla de firewall coincidente, 0 tareas, 0 conexiones seleccionadas.
 - **F0 QA en PC con AutoCAD instalado:** PENDIENTE de la validación final integrada; no bloquea desarrollo de F1/F2/F3/F4. No afirmar que detección 2023–2027 esté certificada.
-- **F1 clasificación/bloqueos:** NO COMENZADO. No bloquear WebView2 globalmente ni afirmar aislamiento.
+- **F1 catalogo:** IMPLEMENTADO, CI PASS PS5.1/PS7 con fixtures, y smoke de 8 etapas PASS en Windows limpio. **F2 historicos:** IMPLEMENTADO en modo solo lectura. **F2 GUI:** desarrollado, parser PASS; QA visual REAL PENDIENTE. **F3 aislamiento y F4 firewall:** NO COMENZADOS.
+
+## F1/F2 avance reciente (PR #4 Draft)
+- Rama `feat/f1-f2-catalogo-panel` creada sobre F0 (PR #3) y abierta como PR #4 apilado, sin merge a `main`.
+- `src/ParcheCAD.Catalogo.ps1`: descubre EXE por version con recorrido acotado y sin atravesar junctions.
+- `src/ParcheCAD.Historico.ps1`: modelo de reglas y tareas antiguas; no borra ni activa nada.
+- `src/ParcheCAD.Panel.ps1`: panel WinForms; proceso de diagnostico separado para evitar congelar UI.
+- `Abrir_ParcheCAD.cmd` abre panel, consola F0 disponible.
+- `tests/F1F2.Tests.ps1`: fixtures y pruebas negativas de mutaciones.
+- `docs/F1F2_IMPLEMENTACION_QA.md`: decisiones, limites, QA y NEXT.
+- CI F1/F2 run #7 PASS https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39527536436.
 
 ## Código y evidencias
 - `src/ParcheCAD.Core.ps1`: descubrimiento de instalaciones, procesos WebView2, servicios, filtros firewall, tareas y conexiones. Consultas de solo lectura.
@@ -39,4 +49,4 @@ Rama de solo documentación PR #2 Draft: 10 pasadas y plan F0–F6, sin merge. S
 - La 4.0 no se declara lista para producción hasta QA final; si el aislamiento exclusivo WebView2 no resulta técnicamente demostrable, debe quedar explícito y no bloquear globalmente por defecto.
 
 ## NEXT — único y accionable
-**F1/F2 implementación sin dependencias del usuario:** integrar catálogo de descubrimiento de AutoCAD 2023–2027, clasificación de ejecutables y servicios, motor histórico de reglas, UI con progreso y reversión inspirada en V3.0/3.2. Mantener CI verde, todo en PRs Draft y main sin merge hasta revisión. Preparar una candidata funcional para QA de usuario **una vez**, al cierre de la aplicación integrada.
+**F3/F4 desarrollo sin intervencion del usuario:** investigar atribucion WebView2 y desarrollar planificador idempotente de reglas por ejecutable, backup y rollback (sin bloquear WebView2 compartido por defecto). Acompanarlo de tests en Windows y QA de mutaciones en VM aislada. Integrar controles en el panel solo cuando su motor tenga puertas PASS. Reservar prueba de usuario para RC1 integral. Mantener PR #3 y #4 Draft, sin merge.
