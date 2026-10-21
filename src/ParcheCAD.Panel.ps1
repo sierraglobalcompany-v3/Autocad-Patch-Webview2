@@ -175,6 +175,12 @@ function PCAD-Finish {
     $lines.Add(("Resultado: {0}" -f $ui.Result))
     $catalogRows=@(Get-PCADReportRows -Object $ui.Sections -Name 'Catalog')
     $lines.Add(("Catalogo: {0} ejecutables" -f $catalogRows.Count))
+    $scope=@(Get-PCADReportRows -Object $ui.Sections -Name 'CatalogScope')
+    if($scope.Count -eq 1){
+        $lines.Add(('F14 alcance de EXE: AutoCAD {0}; Autodesk compartido {1}; bloqueo de compartidos: NO' -f
+           (Get-PCADReportField -Object $scope[0] -Name 'ProductStatus'),
+           (Get-PCADReportField -Object $scope[0] -Name 'SharedStatus')))
+    }
     $network=@(Get-PCADReportRows -Object $ui.Sections -Name 'NetworkOverview')
     if($network.Count -gt 0 -and $null -ne $network[0]) {
         $lines.Add(('Atribucion F3: {0} WebView2 observados, {1} AutoCAD probable(s), aislamiento NO VERIFICADO' -f $network[0].TotalWebView2,$network[0].ProbableAutoCAD))
