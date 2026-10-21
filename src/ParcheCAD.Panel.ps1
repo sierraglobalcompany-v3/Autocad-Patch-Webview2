@@ -14,6 +14,7 @@ $script:Proc=$null
 $script:RunRoot=''
 $script:LogOut=''
 $script:LogErr=''
+$script:ExitMarker=''
 $script:Started=Get-Date
 $script:LastReport=$null
 $script:LastExitCode=$null
@@ -93,7 +94,23 @@ function PCAD-Finish {
     $p=$script:Proc
     if($null -eq $p){return}
     $script:Proc=$null
-    $p.Refresh();$code=$p.ExitCode;$p.Dispose()
+    # ExitCode of Start-Process -PassThru is not consistently readable in
+    # Windows PowerShell 5.1. The child writes a completion marker only after
+    # persisting its JSON; absent, damaged or contradictory marker => PARTIAL.
+    $p.Refresh()
+    $nativeCode=$null
+    try {$nativeCode=$p.ExitCode} catch {}
+    $p.Dispose()
+    $code=2
+    if($script:ExitMarker -and (Test-Path -LiteralPath $script:ExitMarker -PathType Leaf)){
+        try {
+            $text=(Get-Content -LiteralPath $script:ExitMarker -Raw -ErrorAction Stop).Trim()
+            if($text -cin @('0','2')){
+                $code=[int]$text
+                if($null -ne $nativeCode -and [int]$nativeCode -ne $code){$code=2}
+            }
+        } catch {$code=2}
+    }
     $script:LastExitCode=$code
     PCAD-Busy $false
     $bar.Style='Continuous';$bar.Value=100
@@ -204,7 +221,8 @@ function PCAD-Begin {
         New-Item -ItemType Directory -Path $script:RunRoot -ErrorAction Stop | Out-Null
         $script:LogOut=Join-Path $script:RunRoot 'salida.log'
         $script:LogErr=Join-Path $script:RunRoot 'errores.log'
-        $arguments='-NoLogo -NoProfile -ExecutionPolicy RemoteSigned -File "{0}" -OutputDirectory "{1}"' -f $script:Runner,$script:RunRoot
+        $script:ExitMarker=Join-Path $script:RunRoot 'diagnostico.exitcode'
+        $arguments='-NoLogo -NoProfile -ExecutionPolicy RemoteSigned -File "{0}" -OutputDirectory "{1}" -WriteExitMarker' -f $script:Runner,$script:RunRoot
         $script:Proc=Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList $arguments -WindowStyle Hidden -RedirectStandardOutput $script:LogOut -RedirectStandardError $script:LogErr -PassThru -ErrorAction Stop
         $script:Started=Get-Date
         PCAD-Busy $true
@@ -318,12 +336,6 @@ if($InteractionSelfTest){
         $createdRunRoot=$script:RunRoot
         if(!$script:Proc.WaitForExit(65000)){throw 'F9: read-only diagnostic child exceeded 65 seconds'}
         Write-Host ('F9 child before finish: PID={0}; ExitCode={1}; HasExited={2}; dataDir={3}' -f $script:Proc.Id,$script:Proc.ExitCode,$script:Proc.HasExited,$script:RunRoot)
-        $rawExit='UNAVAILABLE'
-        try {$rawExit=$script:Proc.GetType().GetProperty('ExitCode').GetValue($script:Proc,$null)} catch {$rawExit=$_.Exception.GetType().Name}
-        Write-Host ('F9 process type: {0}; reflected ExitCode={1}; PS exit property type={2}' -f $script:Proc.GetType().FullName,$rawExit,$script:Proc.PSObject.Properties['ExitCode'].MemberType)
-
-        PCAD-Finish
-        Write-Host ('F9 after finish: procNull={0}; LastExitCode={1}; reportNull={2}' -f ($null -eq $script:Proc),$script:LastExitCode,($null -eq $script:LastReport))
         if($null -eq $script:LastReport -or $null -eq $script:LastExitCode){
             Write-Host ('F9 diagnostic subprocess exit: {0}' -f $script:LastExitCode)
             Write-Host ('F9 diagnostic status: {0}' -f $status.Text)
