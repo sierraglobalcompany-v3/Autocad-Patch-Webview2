@@ -1,85 +1,75 @@
 # PROJECT_CONTINUITY_CURRENT — ParcheCAD 4.0
 
-**Fecha:** 2026-10-20/21  | **Repositorio único:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2
+**Fecha:** 2026-10-21 · **Estado:** desarrollo F0–F6; **SIN RC1, SIN RELEASE NI DEPLOY**.  
+**Repositorio único:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2  
+**Rama de trabajo actual:** `feat/f6-recovery-package` · **PR #8 Draft** (apilado sobre #7 → #6 → #5 → #4 → #3).  
+**Main:** no fusionada con estas funcionalidades. Nunca anunciar que el código de los PR está en `main`.
 
-## Scope y metodología
-Control/diagnóstico de conectividad AutoCAD 2023–2027 y estudio de WebView2 compartido. Reglas KISS / anti-ruido, sin runtime sin docs, checkpoints, PR Draft, QA real obligatorio antes de release, sin pedir al usuario pruebas de cada fase. No tocar otros proyectos ni crear servicios/drivers sin evidencia.
+## 1. Solicitud y límites que deben sobrevivir a otros chats
 
-## Estado comprobado
-- **F0 implementación:** código en rama `feat/f0-diagnostico-solo-lectura`, PR #3 Draft, sin merge.
-- **F0 static QA:** PASS en Windows PowerShell 5.1 y PowerShell 7. Workflow `F0 static QA` ejecución #3, SHA `3d86242f88028c8e8d36ce469f18550d0ee5b64a`.
-- **F0 smoke QA:** PASS en Windows Server 2022 de GitHub-hosted runner sin AutoCAD: seis secciones completadas, cero modificaciones, código de salida 0. Resultado: 0 instalaciones, 0 procesos, 0 servicios, 1 regla de firewall coincidente, 0 tareas, 0 conexiones seleccionadas.
-- **F0 QA en PC con AutoCAD instalado:** PENDIENTE de la validación final integrada; no bloquea desarrollo de F1/F2/F3/F4. No afirmar que detección 2023–2027 esté certificada.
-- **F1 catalogo:** IMPLEMENTADO, CI PASS PS5.1/PS7 con fixtures, y smoke de 8 etapas PASS en Windows limpio. **F2 historicos:** IMPLEMENTADO en modo solo lectura. **F2 GUI:** desarrollado, parser PASS; QA visual REAL PENDIENTE. **F3 observación y F4 firewall:** IMPLEMENTADOS en PRs #5 y #6; F4 con prueba temporal Windows real PASS, aislamiento WebView2 NO VERIFICADO.
+La aplicación debe gestionar bloqueos de conectividad saliente para AutoCAD 2023–2027 y componentes Autodesk relacionados. El usuario acepta pérdida de funciones online, pero exige que el uso compartido de Microsoft WebView2 por WhatsApp, Outlook u otras apps no quede bloqueado indiscriminadamente. También desea que AutoCAD no use WebView2, un objetivo **distinto** de bloquear conexiones de red; aún no está demostrado ni implementado.
 
-## F1/F2 avance reciente (PR #4 Draft)
-- Rama `feat/f1-f2-catalogo-panel` creada sobre F0 (PR #3) y abierta como PR #4 apilado, sin merge a `main`.
-- `src/ParcheCAD.Catalogo.ps1`: descubre EXE por version con recorrido acotado y sin atravesar junctions.
-- `src/ParcheCAD.Historico.ps1`: modelo de reglas y tareas antiguas; no borra ni activa nada.
-- `src/ParcheCAD.Panel.ps1`: panel WinForms; proceso de diagnostico separado para evitar congelar UI.
-- `Abrir_ParcheCAD.cmd` abre panel, consola F0 disponible.
-- `tests/F1F2.Tests.ps1`: fixtures y pruebas negativas de mutaciones.
-- `docs/F1F2_IMPLEMENTACION_QA.md`: decisiones, limites, QA y NEXT.
-- CI F1/F2 run #7 PASS https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39527536436.
+No afirmar que «todo Autodesk está desconectado» ni que «AutoCAD no usa WebView2»: el bloqueo por ruta de EXE principal/producto no cubre servicios Autodesk compartidos, proxies ni un runtime `msedgewebview2.exe` compartido. No modificar autenticación/licencias/binarios del proveedor ni desactivar AVG/Defender. El modo sin conexión puede afectar validaciones legítimas.
 
-## Código y evidencias
-- `src/ParcheCAD.Core.ps1`: descubrimiento de instalaciones, procesos WebView2, servicios, filtros firewall, tareas y conexiones. Consultas de solo lectura.
-- `src/ParcheCAD.Diagnostico.ps1`: orquestación, barra de progreso en consola, errores no confundidos con cero resultados, exportación local TXT/JSON.
-- `Abrir_ParcheCAD.cmd`: lanzador sin elevar automáticamente.
-- `tests/F0.Tests.ps1`: parser y pruebas puras sin dependencias de terceros.
-- `.github/workflows/f0-static-qa.yml`: PS5.1, PS7 y smoke Windows sin AutoCAD.
-- `docs/F0_GUIA_USO_Y_QA.md`: instrucciones y pruebas manuales.
+### Principios de trabajo
+1. **KISS:** simple, eficiente, optimizado, eficaz; no introducir servicios, drivers ni dependencias sin evidencia.
+2. **Anti-ruido:** mejorar, optimizar, unir o eliminar código redundante; demostrar motivo, no acumular soluciones en paralelo.
+3. **No parches:** localizar la causa y corregir el módulo de origen junto con los componentes afectados.
+4. **UX clara:** progreso no bloqueante, estado exacto, controles confirmados y recuperación entendible; no mostrar PASS falso.
+5. **Checkpoints y documentación:** README + SPEC + continuidad alineados; QA y CI antes de considerar fase completa.
+6. **No ping-pong al usuario:** no pedir pruebas de módulos parciales en su PC; preparar una RC1 integral cuando realmente lo permita la evidencia.
 
-## Riesgos y límites
-- Firewalls basados en la ruta de `acad.exe` **NO** aíslan automáticamente conexiones de `msedgewebview2.exe` compartido.
-- Atribución de WebView2 por PID padre/UDF = PROBABLE, no conclusión absoluta.
-- Resultado de una consulta de firewall no equivale a bloqueo efectivo. F0 no modifica licencias, servicios, tareas, reglas ni registro.
-- El diagnóstico es una instantánea que puede omitir conexiones efímeras. Comprobar resultados reales al abrir AutoCAD y durante distintas funciones.
-- Informes locales bajo `informes/` están gitignorados. Antes de adjuntarlos o publicarlos, revisar privacidad.
-- No desactivar AVG/Defender ni agregar exclusiones para ejecutar.
+## 2. Qué está implementado
 
-## PREVIOUS
-Rama de solo documentación PR #2 Draft: 10 pasadas y plan F0–F6, sin merge. Scripts legacy V2/3.x únicamente referencia auditada, no publicados como release nuevo. Capturas V3.0: 96 reglas AutoCAD retiradas, 2 WebView2 remanentes, una tarea heredada; esto no es inventario exhaustivo de los 96 EXE.
+| Etapa | Código / funcionalidad | Validación |
+|---|---|---|
+| F0 | Diagnóstico registro/instalaciones, procesos, servicios, firewall, tareas, conexiones e informes locales | CI Windows 5.1/7 y smoke sin AutoCAD |
+| F1 | Descubrimiento de EXE AutoCAD 2023–2027, clasificación de componentes compartidos | Fixtures + smoke |
+| F2 | Históricos PCAD/SGC/WebView2, panel WinForms y progreso por proceso separado | Parser + WinForms SelfTest; sin QA interactiva completa |
+| F3 | Árbol WebView2 y conexiones observables (atribución PROBABLE/INDETERMINADA) | Fixtures; no atribución absoluta ni aislamiento |
+| F4 | Planificador Outbound por EXE de producto, identificador estable, Apply/rollback explícitos y journal | Mocks e integración con firewall real **únicamente en Windows efímero** |
+| F5 | Rutas personalizadas privadas, reportes saneados, evaluación de journal aplicado/incompleto/corrupto | CI y fixtures |
+| F6 | Fallback por DisplayIcon verificando acad.exe; recuperación de journal CREATING con regla temporal real; ZIP DEV determinista con SHA256 | **CI #49 4/4 PASS** |
 
-## Decisión de flujo de trabajo (solicitada por el usuario)
-- No pedir al usuario ejecutar pruebas fragmentadas con F0/F1/F2.
-- Reutilizar/auditar la lógica que ya funcionó de ParcheCAD 3.0 y mejoras de 3.2 como base; no copiarlas sin revisión.
-- Completar experiencia de usuario, motor de descubrimiento, estado y recuperación, reglas selectivas con preview e idempotencia, pruebas con mocks/CI y pruebas de integración seguras en Windows accesible.
-- El QA real en PC con AutoCAD queda como **prueba de aceptación de una versión candidata integrada**, no como requisito para empezar F1.
-- La 4.0 no se declara lista para producción hasta QA final; si el aislamiento exclusivo WebView2 no resulta técnicamente demostrable, debe quedar explícito y no bloquear globalmente por defecto.
+**CI #49:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39536342870 — PowerShell 5.1, PowerShell 7, integración real sobre regla temporal y construcción/extracción/verificación de ZIP. Se detectó y reparó un error de parser en el nuevo código DisplayIcon antes de ese PASS.
 
-## F3/F4 — avance actual en PR #5 Draft
+## 3. Arquitectura vigente y reconstrucción desde GitHub
 
-- **F3 OBSERVACIÓN:** implementado `src/ParcheCAD.Network.ps1`; atribución WebView2 por proceso padre/UDF = PROBABLE/INDETERMINADA, no garantía de aislamiento.
-- **F4 POLICY/PREVIEW:** implementado `src/ParcheCAD.Policy.ps1` y `src/ParcheCAD.Reglas.ps1`; vista previa sin escritura, IDs deterministas y rechazo de rutas no exclusivas de AutoCAD 2023–2027.
-- **F4 APLICAR/REVERTIR:** funciones implementadas `src/ParcheCAD.Firewall.ps1` con admin + -Commit, journal de cambios y compensación sobre errores. Inicialmente simuladas en PR #5; posterior QA real efímera PASS en PR #6.
-- Diagnóstico de **10 etapas**; panel WinForms muestra resumen de atribución WebView2 y vista previa F4, mantiene operación **solo lectura**.
-- **CI:** PASS Windows PowerShell 5.1 y 7 en ejecución https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39529793461. Smoke de diagnóstico + preview Windows sin AutoCAD PASS; pruebas mock aplicación/rollback/conflictos/idempotencia PASS.
-- Documento: `docs/F3F4_IMPLEMENTACION_QA.md`.
-- PR #5 apilado sobre PR #4, que depende de PR #3. Todos Draft, no merge a main.
-- Bloqueo exclusivo de WebView2 de AutoCAD **NO RESUELTO**. La política F4 excluye `msedgewebview2.exe` compartido para proteger WhatsApp/Correo.
-- UI gráfica **no certificada visualmente**; QA Windows real de regla/reversión **PENDIENTE**.
+- `src/ParcheCAD.Core.ps1`: instalaciones, servicios, procesos, firewall, tareas y conexiones (solo lectura).
+- `src/ParcheCAD.Catalogo.ps1`: descubrimiento por versión, controles de recorrido y clasificación.
+- `src/ParcheCAD.Historico.ps1`: familia de reglas antiguas y estados de recuperación (no elimina reglas ajenas).
+- `src/ParcheCAD.Network.ps1`: observación de WebView2 por host probable.
+- `src/ParcheCAD.Policy.ps1`: plan/ID de reglas, verificación de identidad, EXE admitido.
+- `src/ParcheCAD.Firewall.ps1`: aplicación y rollback explícitos, journal privado. Sin servicio residente.
+- `src/ParcheCAD.Evidence.ps1`: copias saneadas para informes públicos.
+- `src/ParcheCAD.Diagnostico.ps1`: orquestación de diez etapas, JSON/TXT.
+- `src/ParcheCAD.Reglas.ps1`: CLI Preview / Apply / Rollback, confirmación escrita.
+- `src/ParcheCAD.Panel.ps1`: panel WinForms, proceso hijo y autorización UAC.
+- `Abrir_ParcheCAD.cmd`: lanzador Windows del panel.
+- `tools/Build-ParcheCAD.ps1`: ZIP DEV con allowlist, hashes por archivo y checksum del ZIP.
+- `tests/F0.Tests.ps1`, `F1F2.Tests.ps1`, `F3F4.Tests.ps1`, `F5.Tests.ps1`, `F4.RealFirewall.Integration.ps1`, `F6.Package.Tests.ps1`: suites locales/CI.
+- `.github/workflows/f0-static-qa.yml`: cuatro jobs Windows, incluye artifact DEV retenido temporalmente.
 
-## F4 — QA real e interfaz (PR #6 Draft)
-- **CI #32 PASS (3 trabajos):** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39532218826
-- Windows Server 2022 GitHub-hosted efímero: regla real temporal creada, confirmada, repetida sin duplicados, retirada aun después de borrar EXE ficticio. No tocó Autodesk ni WebView2.
-- PowerShell 5.1 + 7: parser, fixtures y suite F0–F4 PASS. GUI WinForms inicializa con controles deshabilitados hasta análisis: self-test PASS, pero QA visual de clics NO CERTIFICADO.
-- GUI en `src/ParcheCAD.Panel.ps1`: vista previa, Apply con UAC + doble confirmación, Rollback por manifiesto propio. No activa reglas al iniciar.
-- Correcciones: DisplayName aceptado por Windows; rollback huérfano; errores de consulta no se confunden con reglas ausentes; reconstrucción de manejadores GUI sin sintaxis corrupta.
-- Evidencia: `docs/F4_INTERFAZ_QA_REAL.md`.
-- **LIMITES:** WebView2 compartido NO aislado; servicios Autodesk compartidos no cubiertos automáticamente. AutoCAD real 2023–2027 y rutas personalizadas pendientes de prueba final. No llamar RC1 todavía.
-- Cuatro PR apilados Draft: #3 F0, #4 F1/F2, #5 F3/F4, #6 integración y QA. Ninguno merge a main.
+**Reconstrucción:** clonar la rama actual, leer README/SPEC/F6 y ejecutar el workflow de GitHub Actions; el artifact `ParcheCAD_4.0_DEV_NOT_RELEASE` se produce de la fuente del repositorio, no de copias locales antiguas. ZIP actual: `ParcheCAD_4.0_DEV_NO_RELEASE.zip`. El pipeline valida reproducibilidad de dos builds, manifiesto SHA256, extracción, CLI Preview y arranque de WinForms SelfTest. **No instalar/usar Apply en PC principal por ahora.**
 
-## F5 — rutas personalizadas, privacidad y recuperación (PR #7 Draft)
-- Rama `feat/f5-rutas-recuperacion`, apilada sobre `feat/f4-integracion-qa-aislado`. **No merge ni release**.
-- Detección y clasificación pueden usar rutas internas completas para instalaciones personalizadas; JSON/TXT se genera a partir de copias saneadas. La ruta privada nunca se recompone desde el informe exportado.
-- El plan incluye raíz de instalación comprobada, tanto para aplicar reglas como para revertirlas después de quitar el EXE. Fallback compatible con la ruta estándar heredada.
-- `Get-PCADRecoveryOverview` consulta de solo lectura las operaciones guardadas, distingue registros aplicados, interrumpidos y corruptos; **no garantiza que reglas sigan efectivas**.
-- GUI WinForms enseña recuperación y no habilita Aplicar ante diagnóstico PARCIAL, conflicto o tarea activa; se agregaron aserciones de estado al self-test.
-- **CI final F5 #46 PASS (3/3):** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39535189157 (Windows PowerShell 5.1/7; fixtures F0–F5; GUI autoevaluada; diagnóstico+preview read-only; regla de prueba real creada/revertida en Windows efímero).
-- Evidencia y límites: `docs/F5_INTEGRACION_RECUPERACION_QA.md`.
-- **BLOCKED para RC1:** QA interactiva real WinForms+UAC y reinicio, detección con AutoCAD instalado, interrupción deliberada durante modificación, validación de tráfico y cobertura Autodesk compartido, aislamiento WebView2 exclusivo NO RESUELTO.
-- Metodología: KISS / ley anti-ruido, reparar fuente, sin parches paralelos. El usuario NO debe probar módulos parciales.
+Historial de auditoría: `docs/F0_GUIA_USO_Y_QA.md`, `F1F2_IMPLEMENTACION_QA.md`, `F3F4_IMPLEMENTACION_QA.md`, `F4_INTERFAZ_QA_REAL.md`, `F5_INTEGRACION_RECUPERACION_QA.md`, `F6_PAQUETE_PRE_RC.md`. Documentos `docs/SPEC_MAESTRA.md` y `README.md` actualizados.
 
-## NEXT — único y accionable
-**F5 cierre y RC1:** completar QA GUI interactiva en Windows descartable, simular corte en motor real y recuperación/reboot, contrastar detección contra instalaciones Autodesk reales y recopilar medición de tráfico. Preparar paquete íntegro y reproducible cuando tenga PASS; reservar aceptación del usuario para RC1 integrada. Mantener PR #3–#7 Draft sin merge.
+## 4. Evidencia y límites de QA
+
+**PASS demostrado:** sintaxis/tests PS5.1 y 7; diagnosticador Windows sin AutoCAD; inicio no interactivo de WinForms (no prueba de clics en escritorio); regla de EXE ficticio creada, identificada, repetida sin duplicarse y retirada en Windows temporal; recuperación de una regla real con journal marcado CREATING después de interrupción **simulada**; ZIP repetible y verificado por hash.
+
+**PENDIENTE / no generalizar:**
+- No se probó en un Windows con AutoCAD real 2023, 2024, 2025, 2026 o 2027 instalado.
+- No hay QA gráfica completa de botones/UAC aceptada y denegada, cancelación, cierre durante proceso administrativo, pantallas con DPI variable ni AVG del usuario.
+- No hay interrupción física real/reinicio entre escritura y rollback (solo simulación controlada), ni verificación del comportamiento persistente en el equipo objetivo.
+- No existe prueba de bloqueo de **todo** el tráfico Autodesk, IPv4/IPv6 TCP/UDP ni de servicios compartidos de Autodesk. Las reglas por EXE pueden bloquear también tráfico LAN.
+- **WebView2 exclusivo de AutoCAD: NO RESUELTO.** El runtime Microsoft compartido está intencionalmente excluido para no afectar otras aplicaciones.
+- Los reportes están sanitizados, pero los manifests de operaciones contienen rutas completas y permanecen locales bajo `informes/`, excluidos de Git.
+
+## 5. Política GitHub y entrega
+
+PRs apilados #3–#8 **Draft**, sin merge, deploy ni Release. CI verde **no** implica aplicación final aprobada. Todos los cambios de lógica viven en GitHub; no depender de carpetas temporales del asistente ni del PC del usuario. No incluir logs privados en PR. Los ZIP de Actions son artefactos temporales de desarrollo.
+
+## NEXT único
+
+**F7 — Cierre de QA integral para RC1:** investigar/validar GUI interactiva y UAC en Windows desechable, manejo de errores/cierre/reinicio, cobertura real de componentes Autodesk compartidos y su riesgo de bloqueo, posibilidad real de aislar WebView2 sin afectar otras aplicaciones, y compatibilidad de instalaciones reales. Resolver desde código y tests; documentar PASS/PARTIAL/BLOCKED. Solo después decidir si RC1 puede anunciarse y pedir **una única prueba final integrada** al usuario. No crear drivers ni bloquear WebView2 global sin demostración.
