@@ -61,6 +61,9 @@ try{
     Assert-F17 ($overwriteExit -ne 0) 'refuse overwrite'
     Assert-F17 ($missingExit -ne 0) 'missing after fails closed'
     Assert-F17 (!(Test-Path -LiteralPath (Join-Path $tmp 'evaluacion\F17_MATRIZ_EVIDENCIA.json'))) 'no partial matrix'
+    # Expected child failures leave LASTEXITCODE=1 even when assertions PASS.
+    # Reset only after both negative outcomes have been explicitly asserted.
+    $global:LASTEXITCODE=0
     Write-Host 'PASS F17: session distinct, 10 evidence gates, fail-closed, no RC1 or firewall changes.' -ForegroundColor Green
 }finally{
     if(Test-Path -LiteralPath $tmp){Remove-Item -LiteralPath $tmp -Recurse -Force}
