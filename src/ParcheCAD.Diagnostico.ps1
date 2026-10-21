@@ -54,7 +54,11 @@ foreach ($stage in $stages) {
             }
             Firewall {$result=@(Get-PCADFirewall);break}
             Tasks {$result=@(Get-PCADTasks);break}
-            Historico {$result=@(Get-PCADLegacyOverview -Firewall @($sections['Firewall']) -Tasks @($sections['Tasks']));break}
+            Historico {
+                $journalDirectory=Join-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'informes') 'operaciones'
+                $result=@(Get-PCADLegacyOverview -Firewall @($sections['Firewall']) -Tasks @($sections['Tasks']) -JournalDirectory $journalDirectory)
+                break
+            }
             Connections {$result=@(Get-PCADConnections -Processes @($sections['Processes']));break}
             NetworkOverview {$result=@(Get-PCADNetworkOverview -Processes @($sections['Processes']) -Connections @($sections['Connections']));break}
             PolicyPreview {
