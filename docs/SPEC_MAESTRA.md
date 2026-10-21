@@ -1,5 +1,5 @@
 # SPEC MAESTRA — ParcheCAD 4.0
-**Estado:** F0–F9 en desarrollo con QA Windows y ZIP DEV reproducible, no RC ni release · **Repositorio:** sierraglobalcompany-v3/Autocad-Patch-Webview2 · **Fecha:** 2026-10-20
+**Estado:** F0–F10 en desarrollo con QA Windows y ZIP DEV reproducible, no RC ni release · **Repositorio:** sierraglobalcompany-v3/Autocad-Patch-Webview2 · **Fecha:** 2026-10-20
 
 ## Objetivo y definiciones de éxito
 Inventariar AutoCAD 2023–2027, sus ejecutables y servicios, procesos WebView2, reglas de firewall y conexiones. Evaluar aislamiento de conexiones de Autodesk, aceptando pérdida de funciones en línea, sin afectar WebView2 de WhatsApp/Outlook.
@@ -96,4 +96,12 @@ Nunca deshabilitar AVG/Defender, añadir exclusiones, evadir alertas, eliminar l
 - Un runner GitHub Actions puede no disponer de escritorio interactivo; no confundir tests de eventos con auditoría visual/UAC. Evidencia CI #84 (4/4 PASS): https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39542376065
 - Documento de evidencia: `docs/F9_WINFORMS_EVENT_QA.md`. El código del panel no aplica reglas al inicio y WebView2 compartido permanece excluido.
 
-**NEXT: F10 — QA visual/UAC en Windows interactivo aislado, reinicio y cobertura real AutoCAD/WebView2. PRs Draft; no merge ni release.**
+## F10 — procesos propios y recuperación independiente (2026-10-21)
+
+- `Cancelar` y `FormClosing` deben detener exclusivamente el proceso hijo de diagnóstico, esperar hasta 5 segundos y comprobar su salida. Si falla, preservar estado y reportar ERROR, nunca fingir CANCELADO ni cerrar a ciegas.
+- Los controles administrativos no son objeto de cancelación/terminación general, y procesos ajenos (incluyendo WebView2) quedan fuera.
+- Un segundo PowerShell, lanzado desde cero, puede importar módulos y recuperar la regla temporal PCAD4 que otro proceso dejó con journal CREATING. **No equivale a reinicio del sistema operativo**.
+- QA CI #90 PS5.1/7, WinForms STA por eventos, firewall temporal, recuperación de nuevo proceso, integridad de ZIP. https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39543990081
+- Evidencia y límites: `docs/F10_PROCESOS_RECUPERACION_QA.md`. No se ha verificado aislamiento exclusivo WebView2 ni tráfico total Autodesk.
+
+**NEXT: F11 — matriz de cobertura de servicios/EXE Autodesk y WebView2, después QA de escritorio Windows interactivo/UAC/reinicio. PRs Draft; no merge ni release.**
