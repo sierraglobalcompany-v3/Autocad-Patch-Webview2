@@ -1,5 +1,5 @@
 # SPEC MAESTRA — ParcheCAD 4.0
-**Estado:** F0–F14 en desarrollo con QA Windows y ZIP DEV reproducible, no RC ni release · **Repositorio:** sierraglobalcompany-v3/Autocad-Patch-Webview2 · **Fecha:** 2026-10-20
+**Estado:** F0–F15 en desarrollo con QA Windows y ZIP DEV reproducible, no RC ni release · **Repositorio:** sierraglobalcompany-v3/Autocad-Patch-Webview2 · **Fecha:** 2026-10-20
 
 ## Objetivo y definiciones de éxito
 Inventariar AutoCAD 2023–2027, sus ejecutables y servicios, procesos WebView2, reglas de firewall y conexiones. Evaluar aislamiento de conexiones de Autodesk, aceptando pérdida de funciones en línea, sin afectar WebView2 de WhatsApp/Outlook.
@@ -140,5 +140,14 @@ Nunca deshabilitar AVG/Defender, añadir exclusiones, evadir alertas, eliminar l
 - Todos los EXE descubiertos en raíces compartidas permanecen `AUTODESK_COMPARTIDO`, `Policy=SOLO_INVENTARIO`, excluidos de reglas automáticas; WebView2 `msedgewebview2.exe` continúa excluido.
 - `Sections.CatalogScope` expone estados de ambas exploraciones y `SharedAutomaticBlocking=false`; WinForms informa el estado. La existencia en carpeta no demuestra firma, proveedor ni uso exclusivo.
 - Fixtures `tests/F14.SharedCatalog.Tests.ps1` PS5.1/7 y test headless del diagnóstico/UI; evidencia `docs/F14_INVENTARIO_COMPARTIDO_QA.md`.
+
+## F15 — rechazo de rutas redirigidas
+
+- La pertenencia textual a una raíz AutoCAD no basta si una carpeta intermedia contiene una junction/symlink; no crear reglas que alcancen otros programas.
+- `Assert-PCADNoReparseComponents` revisa todos los componentes existentes del EXE y sus carpetas hasta la unidad; rechazo al planificar y nueva comprobación justo antes de `New-NetFirewallRule`.
+- El inventario registra `PARCIAL` cuando omite enlaces o junctions; no presenta un catálogo como exhaustivo si omitió archivos vinculados.
+- Reversión de reglas propias mantiene `-AllowMissingFile` para instalaciones desinstaladas o movidas, pero comprueba nombre/hash, grupo y filtro exacto antes de eliminar.
+- Test F15 con junctions verdaderas sobre Windows: rechazo de EXE ajeno, preservación de programa externo, rollback elegible y limpieza no recursiva. **CI #119 PASS 4/4:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39551110553
+- Documentación: `docs/F15_REPARSE_GUARD_QA.md`. No equivale a certificar que no exista ninguna carrera al resolver rutas ni a probar AutoCAD real/WebView2.
 
 **NEXT: una única QA integrada de aceptación en Windows con escritorio auténticamente interactivo, AutoCAD instalado, AVG habilitado, trazas de red y reinicio; si no existe entorno/evidencia, RC1 sigue BLOCKED. PRs Draft, no merge ni release.**
