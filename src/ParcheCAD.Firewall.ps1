@@ -62,7 +62,8 @@ function Invoke-PCADRollbackRules {
             $before=Get-PCADActualRuleStatus -RuleName ([string]$entry.RuleName) -Program ([string]$entry.Program)
             if($before.State -eq 'EXISTS_VALID') {
                 Remove-NetFirewallRule -Name ([string]$entry.RuleName) -PolicyStore PersistentStore -ErrorAction Stop
-                $after=Get-PCADActualRuleStatus -RuleName ([string]$entry.RuleName) -Program ([string]$entry.Program)
+                $stage='POST_VERIFY'
+            $after=Get-PCADActualRuleStatus -RuleName ([string]$entry.RuleName) -Program ([string]$entry.Program)
                 if($after.State -ne 'MISSING'){throw 'Regla sigue presente luego de la eliminacion.'}
             } elseif($before.State -ne 'MISSING'){throw 'Regla modificada/ajena. No retirar.'}
             $entry.State='ROLLED_BACK';$count++
@@ -116,6 +117,7 @@ function Invoke-PCADApplyPlan {
     }
     Write-PCADJournal -Journal $journal -File $journalPath
     $created=0
+    $stage='APPLY_START'
     try {
         foreach($e in @($journal.Operations)){
             if($e.State -ne 'PENDING'){continue}
@@ -123,8 +125,10 @@ function Invoke-PCADApplyPlan {
             if($state.State -ne 'MISSING'){throw ('Regla cambio antes de aplicar: '+$e.RuleName)}
             $e.State='CREATING'
             Write-PCADJournal -Journal $journal -File $journalPath
+            $stage='NEW_NETFIREWALL_RULE'
             New-NetFirewallRule -Name $e.RuleName -DisplayName $e.DisplayName -Group 'PCAD4_MANAGED' -Direction Outbound -Action Block -Program $e.Program -Enabled True -Profile Any -PolicyStore PersistentStore -ErrorAction Stop | Out-Null
             # Registrar incluso si la validacion posterior falla, para poder revertir.
+            $stage='JOURNAL_CREATED'
             $e.State='CREATED'
             Write-PCADJournal -Journal $journal -File $journalPath
             $after=Get-PCADActualRuleStatus -RuleName $e.RuleName -Program $e.Program
@@ -144,7 +148,7 @@ function Invoke-PCADApplyPlan {
         try{$rollback=Invoke-PCADRollbackRules -JournalPath $journalPath -Commit}catch{}
         return [pscustomobject]@{
             Status=if($null -ne $rollback -and $rollback.Remaining -eq 0){'ERROR_ROLLED_BACK'}else{'ERROR_MANUAL_REVIEW'}
-            Error=$reason;Manifest=$journalPath;Recovery=$rollback;TrafficVerified=$false
+            Error=$reason;ErrorStage=$stage;Manifest=$journalPath;Recovery=$rollback;TrafficVerified=$false
         }
     } finally {Write-Progress -Activity 'ParcheCAD - aplicando reglas propias' -Completed}
 }
