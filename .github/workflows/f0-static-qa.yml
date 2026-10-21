@@ -1,4 +1,4 @@
-name: ParcheCAD Windows QA (F0-F5)
+name: ParcheCAD Windows QA (F0-F7)
 on:
   pull_request:
   push:
@@ -16,12 +16,19 @@ jobs:
           & .\tests\F1F2.Tests.ps1
           & .\tests\F3F4.Tests.ps1
           & .\tests\F5.Tests.ps1
+          & .\tests\F7.Tests.ps1
       - name: Smoke F0 on clean Windows runner (read-only)
         shell: powershell
         timeout-minutes: 6
         run: |
           $ErrorActionPreference='Stop'
           & .\src\ParcheCAD.Diagnostico.ps1 -NoExport
+      - name: F7 end-to-end partial diagnostic on incomplete transaction
+        shell: powershell
+        timeout-minutes: 6
+        run: |
+          $ErrorActionPreference='Stop'
+          & .\tests\F7.Diagnostico.Integration.ps1
       - name: WinForms construction and control safety smoke (no UI interaction)
         shell: powershell
         timeout-minutes: 3
@@ -47,6 +54,7 @@ jobs:
           & .\tests\F1F2.Tests.ps1
           & .\tests\F3F4.Tests.ps1
           & .\tests\F5.Tests.ps1
+          & .\tests\F7.Tests.ps1
 
   f4-real-firewall-ephemeral:
     # Strictly hosted throwaway Windows VM; fixture is a copy of whoami.exe in TEMP.

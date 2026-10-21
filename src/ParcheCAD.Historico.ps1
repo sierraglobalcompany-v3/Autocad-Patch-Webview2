@@ -35,12 +35,12 @@ function Get-PCADLegacyAssessment {
 function Get-PCADRecoveryOverview {
     [CmdletBinding()]
     param([string]$JournalDirectory='')
-    $active=0;$review=0;$invalid=0;$valid=0;$truncated=$false
+    $active=0;$review=0;$invalid=0;$valid=0;$truncated=$false;$pending=0;$orphanBackups=0
     if(!$JournalDirectory){
         return [pscustomobject]@{Status='NO_CONSULTADO';Valid=$valid;ActiveRules=$active;NeedsReview=$review;Unverified=$invalid}
     }
     if(!(Test-Path -LiteralPath $JournalDirectory -PathType Container)){
-        return [pscustomobject]@{Status='SIN_RESPALDOS';Valid=0;ActiveRules=0;NeedsReview=0;Unverified=0}
+        return [pscustomobject]@{Status='SIN_RESPALDOS';Valid=0;ActiveRules=0;NeedsReview=0;Unverified=0;PendingFiles=0}
     }
     try {
         $files=@(Get-ChildItem -LiteralPath $JournalDirectory -File -Filter 'PCAD4_*.json' -ErrorAction Stop | Select-Object -First 501)
@@ -58,17 +58,34 @@ function Get-PCADRecoveryOverview {
                 }
             }catch {$invalid++}
         }
-        $state=if($invalid -gt 0 -or $truncated){'PARCIAL'}else{'OK'}
+        # Un fichero .pending puede quedar si se interrumpe el guardado atomico.
+        # El .prev suele ser normal; solo alertar si falta el JSON principal.
+        $pending=@(Get-ChildItem -LiteralPath $JournalDirectory -File -Filter 'PCAD4_*.json.pending' -ErrorAction Stop | Select-Object -First 501).Count
+        $orphanBackups=@(Get-ChildItem -LiteralPath $JournalDirectory -File -Filter 'PCAD4_*.json.prev' -ErrorAction Stop | Where-Object {
+            !(Test-Path -LiteralPath $_.FullName.Substring(0,$_.FullName.Length-5) -PathType Leaf)
+        } | Select-Object -First 501).Count
+        if($pending -gt 0 -or $orphanBackups -gt 0){$review+=($pending+$orphanBackups)}
+        $state=if($invalid -gt 0 -or $truncated -or $pending -gt 0 -or $orphanBackups -gt 0 -or $review -gt 0){'PARCIAL'}else{'OK'}
         return [pscustomobject]@{
             Status=$state;Valid=$valid;ActiveRules=$active
-            NeedsReview=$review;Unverified=$invalid
+            NeedsReview=$review;Unverified=$invalid;PendingFiles=$pending;OrphanBackups=$orphanBackups
         }
     }catch {
         return [pscustomobject]@{
             Status='ERROR_ACCESO';Valid=0;ActiveRules=0
-            NeedsReview=0;Unverified=1
+            NeedsReview=1;Unverified=1;PendingFiles=0;OrphanBackups=0
         }
     }
+}
+function Assert-PCADRecoveryReady {
+    [CmdletBinding()]
+    param([string]$JournalDirectory)
+    $result=Get-PCADRecoveryOverview -JournalDirectory $JournalDirectory
+    if($result.Status -notin @('OK','SIN_RESPALDOS') -or
+       [int]$result.NeedsReview -gt 0 -or [int]$result.Unverified -gt 0) {
+        throw ("No aplicar: recuperacion pendiente o respaldos no verificables (estado {0})." -f $result.Status)
+    }
+    return $result
 }
 function Get-PCADLegacyOverview {
     [CmdletBinding()]

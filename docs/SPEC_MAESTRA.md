@@ -1,5 +1,5 @@
 # SPEC MAESTRA — ParcheCAD 4.0
-**Estado:** F0–F6 en desarrollo con QA Windows y ZIP DEV reproducible, no RC ni release · **Repositorio:** sierraglobalcompany-v3/Autocad-Patch-Webview2 · **Fecha:** 2026-10-20
+**Estado:** F0–F7 en desarrollo con QA Windows y ZIP DEV reproducible, no RC ni release · **Repositorio:** sierraglobalcompany-v3/Autocad-Patch-Webview2 · **Fecha:** 2026-10-20
 
 ## Objetivo y definiciones de éxito
 Inventariar AutoCAD 2023–2027, sus ejecutables y servicios, procesos WebView2, reglas de firewall y conexiones. Evaluar aislamiento de conexiones de Autodesk, aceptando pérdida de funciones en línea, sin afectar WebView2 de WhatsApp/Outlook.
@@ -71,4 +71,12 @@ Nunca deshabilitar AVG/Defender, añadir exclusiones, evadir alertas, eliminar l
 - Guardar ZIP como GitHub Actions artifact temporal, sin usar GitHub Releases ni publicarlo como RC o certificado.
 - No confundir interrupción simulada con apagado abrupto/reinicio ensayado. Tampoco equivale a test de AutoCAD real o de aislamiento WebView2.
 
-**NEXT: integración final RC1 — QA gráfica interactiva, UAC/reinicio real, AutoCAD instalado y evidencia honesta de cobertura/WebView2. PRs Draft; no merge ni release.**
+## F7 — recuperación bloqueante (2026-10-21)
+
+- Un registro de recuperación incompleto, corrupto, `.pending` o respaldo `.prev` huérfano implica `PARCIAL`; el diagnóstico no se considera completo.
+- Las rutas GUI y CLI niegan nuevas reglas cuando hay operaciones por revisar. CLI comprueba el estado antes y después de la confirmación administrativa; el rollback explícito sigue disponible.
+- GUI valida las diez etapas, recuperación y conflictos; se deshabilita de forma segura ante campos ausentes, sin excepción.
+- Pruebas PowerShell 5.1/7, WinForms SelfTest, firewall temporal y ZIP SHA256. Ver `docs/F7_FAILCLOSED_GUI_QA.md`.
+- Esto no sustituye QA de UAC real, visual, reinicio, AutoCAD instalado ni aislamiento de WebView2.
+
+**NEXT: F8 — QA gráfica interactiva, UAC/reinicio real, AutoCAD instalado y cobertura de WebView2. PRs Draft; no merge ni release.**

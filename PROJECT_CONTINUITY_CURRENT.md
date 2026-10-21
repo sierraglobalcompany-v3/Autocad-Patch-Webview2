@@ -1,8 +1,8 @@
 # PROJECT_CONTINUITY_CURRENT — ParcheCAD 4.0
 
-**Fecha:** 2026-10-21 · **Estado:** desarrollo F0–F6; **SIN RC1, SIN RELEASE NI DEPLOY**.  
+**Fecha:** 2026-10-21 · **Estado:** desarrollo F0–F7; **SIN RC1, SIN RELEASE NI DEPLOY**.  
 **Repositorio único:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2  
-**Rama de trabajo actual:** `feat/f6-recovery-package` · **PR #8 Draft** (apilado sobre #7 → #6 → #5 → #4 → #3).  
+**Rama de trabajo actual:** `feat/f7-recuperacion-failclosed-uiqa` · **PR #9 Draft** (apilado sobre #8 → #7 → #6 → #5 → #4 → #3).  
 **Main:** no fusionada con estas funcionalidades. Nunca anunciar que el código de los PR está en `main`.
 
 ## 1. Solicitud y límites que deben sobrevivir a otros chats
@@ -30,8 +30,9 @@ No afirmar que «todo Autodesk está desconectado» ni que «AutoCAD no usa WebV
 | F4 | Planificador Outbound por EXE de producto, identificador estable, Apply/rollback explícitos y journal | Mocks e integración con firewall real **únicamente en Windows efímero** |
 | F5 | Rutas personalizadas privadas, reportes saneados, evaluación de journal aplicado/incompleto/corrupto | CI y fixtures |
 | F6 | Fallback por DisplayIcon verificando acad.exe; recuperación de journal CREATING con regla temporal real; ZIP DEV determinista con SHA256 | **CI #49 4/4 PASS** |
+| F7 | Fail-closed cuando existen operaciones y archivos de recuperación pendientes; GUI/CLI no aplican nuevas reglas | **CI #63 4/4 PASS** |
 
-**CI #49:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39536342870 — PowerShell 5.1, PowerShell 7, integración real sobre regla temporal y construcción/extracción/verificación de ZIP. Se detectó y reparó un error de parser en el nuevo código DisplayIcon antes de ese PASS.
+**CI #63:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39538578854 — PowerShell 5.1, PowerShell 7, integración real sobre regla temporal y construcción/extracción/verificación de ZIP. Se corrigió un fallo de manejo de campos ausentes en WinForms antes de PASS; F6 resolvió el parser DisplayIcon.
 
 ## 3. Arquitectura vigente y reconstrucción desde GitHub
 
@@ -68,8 +69,19 @@ Historial de auditoría: `docs/F0_GUIA_USO_Y_QA.md`, `F1F2_IMPLEMENTACION_QA.md`
 
 ## 5. Política GitHub y entrega
 
-PRs apilados #3–#8 **Draft**, sin merge, deploy ni Release. CI verde **no** implica aplicación final aprobada. Todos los cambios de lógica viven en GitHub; no depender de carpetas temporales del asistente ni del PC del usuario. No incluir logs privados en PR. Los ZIP de Actions son artefactos temporales de desarrollo.
+PRs apilados #3–#9 **Draft**, sin merge, deploy ni Release. CI verde **no** implica aplicación final aprobada. Todos los cambios de lógica viven en GitHub; no depender de carpetas temporales del asistente ni del PC del usuario. No incluir logs privados en PR. Los ZIP de Actions son artefactos temporales de desarrollo.
+
+## F7 — Checkpoint más reciente (PR #9 Draft)
+
+- **Problema:** recuperación histórica reportaba incompletos, pero el diagnóstico aún podía quedar COMPLETO y permitir más bloqueos.
+- **Causa corregida en origen:** `Get-PCADRecoveryOverview` marca PARCIAL por `CREATING`, `ROLLBACK_ERROR`, JSON ilegible, archivo `.pending` o `.prev` huérfano. No elimina datos ni reglas ajenas.
+- **Diagnóstico:** etapa Histórico propagada como PARCIAL; reporte no anuncia éxito completo.
+- **CLI Apply:** `Assert-PCADRecoveryReady` antes y después de pedir confirmación. **Rollback no queda bloqueado**, ya que es el mecanismo de solución.
+- **GUI:** exige 10/10 comprobaciones OK, histórico verificable y plan sin conflictos; informe sin campos deshabilita el botón sin colapsar WinForms.
+- **Pruebas:** suites F0–F5 + F7, WinForms SelfTest, **diagnóstico Windows real con journal `.pending` que exige salida PARCIAL**, integración de regla temporal y empaquetado reproducible. **CI #63 (4/4 PASS):** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39538100660.
+- Evidencia: `docs/F7_FAILCLOSED_GUI_QA.md`. Actualizar la cifra CI si algún cambio posterior activa un nuevo run.
+- **PENDIENTE:** QA visual interactiva con UAC, reinstalación/reinicio, AutoCAD real 2023–2027, cobertura Autodesk compartido, aislamiento WebView2 exclusivo. Sin certificación de bloqueo total.
 
 ## NEXT único
 
-**F7 — Cierre de QA integral para RC1:** investigar/validar GUI interactiva y UAC en Windows desechable, manejo de errores/cierre/reinicio, cobertura real de componentes Autodesk compartidos y su riesgo de bloqueo, posibilidad real de aislar WebView2 sin afectar otras aplicaciones, y compatibilidad de instalaciones reales. Resolver desde código y tests; documentar PASS/PARTIAL/BLOCKED. Solo después decidir si RC1 puede anunciarse y pedir **una única prueba final integrada** al usuario. No crear drivers ni bloquear WebView2 global sin demostración.
+**F8 — QA de interfaz y decisión RC1:** comprobar con Windows interactivo descartable clics, UAC, cancelación/cierre, errores y reinicio; verificar alcance real con AutoCAD instalado y no bloquear WebView2 compartido. Resolver defectos en la fuente y mantener PR #3–#9 Draft. No pedir tests por cada fase al usuario ni anunciar RC1 hasta demostrar criterios de aceptación.
