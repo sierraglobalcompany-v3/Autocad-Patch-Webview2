@@ -85,7 +85,7 @@ Nunca deshabilitar AVG/Defender, añadir exclusiones, evadir alertas, eliminar l
 - El proceso hijo debe devolver código 0 y un JSON `Tool=ParcheCAD`, `SchemaVersion=1`, `ReadOnly=true`, resultado completo, diez etapas distintas y OK.
 - Historial sin recuperación sana, vista previa ausente/en conflicto, secciones parciales o contradicción entre código y JSON deshabilitan Aplicar.
 - WinForms anuncia COMPLETO únicamente con evidencia completa; un dato faltante no provoca una excepción ni un falso éxito.
-- QA Windows PS5.1/7, ZIP reconstruido, AutoCAD temporal ficticio, WinForms SelfTest y suites de reportes corruptos/contradictorios. **CI #66 PASS 4/4:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39539739149
+- QA Windows PS5.1/7, ZIP reconstruido, AutoCAD temporal ficticio, WinForms SelfTest y suites de reportes corruptos/contradictorios. **CI #73 PASS 4/4:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39540161818
 - Aun no existe QA visual interactiva, UAC real, AutoCAD 2023–2027 instalado ni aislamiento exclusivo probado de WebView2. Ver `docs/F8_UISTATE_QA.md`.
 
 **NEXT: F9 — QA de interacción gráfica/UAC, reinicio real, AutoCAD instalado y cobertura de WebView2. PRs Draft; no merge ni release.**
