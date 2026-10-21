@@ -48,7 +48,62 @@ try {
     if($LASTEXITCODE -ne 0){throw 'Extracted package preview failed'}
     & $exe -NoProfile -STA -File (Join-Path $unpacked 'src\ParcheCAD.Panel.ps1') -SelfTest
     if($LASTEXITCODE -ne 0){throw 'Extracted package WinForms selftest failed'}
-    Write-Host ('PASS F6 package: deterministic SHA256, {0} files, extracted CLI and WinForms' -f $verified) -ForegroundColor Green
+    # F17 packaged executable is required for disaster recovery on another PC.
+    foreach($required in @('tools\Invoke-ParcheCADF17.ps1',
+                           'tools\Invoke-ParcheCADRC12.ps1',
+                           'src\ParcheCAD.RCGates.ps1',
+                           'src\ParcheCAD.Diagnostico.ps1',
+                           'src\ParcheCAD.Monitor.ps1',
+                           'docs\F17_PROTOCOLO_QA_INTEGRADA.md')){
+        $p=Join-Path $unpacked $required
+        if(!(Test-Path -LiteralPath $p -PathType Leaf)){throw ('F17 missing from extracted ZIP: '+$required)}
+    }
+    # Synthetic evidence only: smoke the F17 CLI FROM the extracted ZIP, not the source tree.
+    # Never call Before/After here: the live hosted-Windows smoke tests those modes.
+    $f17session=Join-Path $tmp 'F17-PACKAGED-FIXTURE'
+    $pre=Join-Path $f17session 'before\fixture'
+    $post=Join-Path $f17session 'after\fixture'
+    $null=New-Item -ItemType Directory -Path $pre -Force
+    $null=New-Item -ItemType Directory -Path $post -Force
+    $stages=@('Installations','Processes','Services','Catalog','Firewall','Tasks',
+              'Historico','Connections','NetworkOverview','PolicyPreview')
+    $fixture=[ordered]@{
+        SchemaVersion=1;Tool='ParcheCAD';GeneratedAt='2026-10-21T09:00:00-05:00'
+        ReadOnly=$true;Result='DIAGNOSTICO_COMPLETADO_SIN_CAMBIOS'
+        Checks=@($stages|ForEach-Object {[pscustomobject]@{Section=$_;Status='OK'}})
+        Sections=[ordered]@{
+            Installations=@()
+            Historico=@([pscustomobject]@{Recovery=[pscustomobject]@{Status='SIN_RESPALDOS';NeedsReview=0;Unverified=0}})
+            Coverage=@([pscustomobject]@{
+                Schema='PCAD_COVERAGE_1';ReadOnly=$true;Status='COBERTURA_NO_CERTIFICADA'
+                CandidateProgramRules=0;ProgramRulesPresent=0;ProgramRulesMissing=0;ProgramRulesUnknown=0
+                AllAutodeskTrafficBlockedVerified=$false
+                AutoCADWebViewLaunchPreventedVerified=$false
+                WebViewIsolatedFromOtherAppsVerified=$false
+            })
+        }
+    }
+    [IO.File]::WriteAllText((Join-Path $pre 'diagnostico.json'),($fixture|ConvertTo-Json -Depth 9))
+    $fixture.GeneratedAt='2026-10-21T09:05:00-05:00'
+    [IO.File]::WriteAllText((Join-Path $post 'diagnostico.json'),($fixture|ConvertTo-Json -Depth 9))
+    & $exe -NoLogo -NoProfile -ExecutionPolicy RemoteSigned -File (Join-Path $unpacked 'tools\Invoke-ParcheCADF17.ps1') -Mode Evaluate -SessionDirectory $f17session
+    if($LASTEXITCODE -ne 0){throw 'Extracted F17 Evaluate CLI failed on synthetic fixture.'}
+    $matrix=Get-Content -LiteralPath (Join-Path $f17session 'evaluacion\F17_MATRIZ_EVIDENCIA.json') -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+    if($matrix.Decision -cne 'BLOCKED' -or $matrix.ProductionCertified -ne $false -or
+       @($matrix.Gates).Count -ne 10 -or !$matrix.ContentsDistinctVerified -or
+       !$matrix.TimestampOrderVerified -or $matrix.SameMachineVerified -ne $false){
+        throw 'Extracted F17 gave an unsafe or incomplete RC assessment.'
+    }
+    # From extracted ZIP: run the read-only monitor for a bounded 2-second smoke.
+    $monitorDir=Join-Path $tmp 'F17-MONITOR-PACKAGED'
+    & $exe -NoLogo -NoProfile -ExecutionPolicy RemoteSigned -File (Join-Path $unpacked 'src\ParcheCAD.Monitor.ps1') -OutputDirectory $monitorDir -DurationSeconds 2 -IntervalMilliseconds 500
+    if($LASTEXITCODE -ne 0){throw 'Extracted temporary monitor failed.'}
+    $mon=Get-Content -LiteralPath (Join-Path $monitorDir 'monitor.json') -Raw | ConvertFrom-Json
+    if($mon.Schema -cne 'PCAD_MONITOR_1' -or $mon.BlockedTrafficVerified -ne $false -or
+       $mon.WebViewIsolationVerified -ne $false -or $mon.Result -cne 'MONITOREO_COMPLETADO_OBSERVACIONAL'){
+        throw 'Extracted monitor failed to preserve observational limits.'
+    }
+    Write-Host ('PASS F6 package: deterministic SHA256, {0} files, extracted CLI, WinForms and F17 evidence' -f $verified) -ForegroundColor Green
 } finally {
     if(Test-Path -LiteralPath $tmp -PathType Container){Remove-Item -LiteralPath $tmp -Recurse -Force}
 }

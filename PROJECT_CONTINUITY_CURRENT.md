@@ -1,9 +1,9 @@
 # PROJECT_CONTINUITY_CURRENT — ParcheCAD 4.0
 
-**Actualizado:** 2026-10-21. **Estado:** F0–F16 desarrolladas en PRs Draft; **SIN RC1 / RELEASE / DEPLOY / MERGE**.  
+**Actualizado:** 2026-10-21. **Estado:** F0–F17 (F17 protocolo LAB read-only, sin prueba AutoCAD) desarrolladas en PRs Draft; **SIN RC1 / RELEASE / DEPLOY / MERGE**.  
 **Repositorio fuente única:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2  
-**Rama vigente:** `fix/f16-firewall-filter-integrity` · **PR #18 Draft**, apilado sobre #17→#16→#15→#14→#13→#12→#11→#10→#9→#8→#7→#6→#5→#4→#3. **`main` aún no tiene estas fases.**  
-**CI de código F16:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39552336715 (primer CI con filtros y prueba de IP restringida). Verificar SIEMPRE el workflow asociado al HEAD final antes de declarar nuevo checkpoint verde. La certificación con AutoCAD real sigue pendiente. No confundir con certificación AutoCAD. Verificar CI sobre último HEAD tras commits de docs.
+**Rama vigente:** `fix/f17-integrated-qa-protocol` · **PR #19 Draft**, apilado sobre #18→#17→#16→#15→#14→#13→#12→#11→#10→#9→#8→#7→#6→#5→#4→#3. **`main` aún no tiene estas fases.**  
+**CI F17 anterior al Monitor:** https://github.com/sierraglobalcompany-v3/Autocad-Patch-Webview2/actions/runs/39559920940 (#138, 4/4 SUCCESS). Revisar siempre CI del HEAD final del PR #19 antes de certificar nuevos cambios. La certificación con AutoCAD real sigue pendiente. No confundir con certificación AutoCAD. Verificar CI sobre último HEAD tras commits de docs.
 
 ## Objetivo del usuario y límites no negociables
 
@@ -21,7 +21,7 @@ El usuario quiere impedir la conectividad saliente de **AutoCAD 2023–2027 y to
 
 **Protección:** nunca bloquear globalmente `msedgewebview2.exe`; no desactivar AVG/Defender, modificar binarios/licencias, tareas o reglas ajenas. Admin solo explícito, reglas PCAD4 con journal reversible; rutas/IP privadas excluidas de artefactos compartidos.
 
-## Implementación probada hasta F12
+## Implementación F0–F17 (pruebas de CI, no certificación del producto)
 
 | Fase | Hecho | Alcance de QA |
 |---|---|---|
@@ -39,7 +39,8 @@ El usuario quiere impedir la conectividad saliente de **AutoCAD 2023–2027 y to
 | F13 | Prueba TCP IPv4 real de EXE ficticio: conexión permitida → bloqueada → restaurada; otro EXE intacto | CI #109 PASS |
 | F14 | Inventario acotado de Autodesk compartido y advertencias de profundidad/cantidad, sin bloqueo automático | CI #117 PASS |
 | F15 | Validación de rutas: sin junction/symlink en plan y Apply, avisos de catálogo parcial | CI #124 PASS |
-| **F16** | **Fallo seguro ante filtros NetSecurity restringidos de puertos, IP, servicio e interfaces** | **QA F16 Windows; consultar CI del último HEAD** |
+| F16 | Fallo seguro ante filtros NetSecurity restringidos | CI #133, 4/4 PASS |
+| F17 | QA integrada solo lectura; captura temporal+hash antes/después, matriz F12 | CI #137 PASS antes del smoke de reconstrucción; nuevo HEAD por confirmar |
 
 ### F12 — evaluación RC1 disponible
 
@@ -89,7 +90,7 @@ El usuario quiere impedir la conectividad saliente de **AutoCAD 2023–2027 y to
 
 ## Reconstrucción desde GitHub
 
-Clonar exactamente la **rama F16**, leer `PROJECT_CONTINUITY_CURRENT.md` + `docs/SPEC_MAESTRA.md` + `docs/F12_GATE_RC1_QA_INTEGRADA.md`, ejecutar GitHub Actions y revisar 4/4 jobs. El artifact temporal `ParcheCAD_4.0_DEV_NOT_RELEASE` contiene ZIP allowlist y SHA256; **NO es instalador RC1 ni está listo para Apply en PC principal**. Ningún JSON local antiguo es necesario para reconstruir el software.
+Clonar exactamente la **rama F17**, leer `PROJECT_CONTINUITY_CURRENT.md` + `docs/SPEC_MAESTRA.md` + `docs/F12_GATE_RC1_QA_INTEGRADA.md`, ejecutar GitHub Actions y revisar 4/4 jobs. El artifact temporal `ParcheCAD_4.0_DEV_NOT_RELEASE` contiene ZIP allowlist y SHA256; **NO es instalador RC1 ni está listo para Apply en PC principal**. Ningún JSON local antiguo es necesario para reconstruir el software.
 
 ## Qué bloquea RC1
 
@@ -102,4 +103,22 @@ Clonar exactamente la **rama F16**, leer `PROJECT_CONTINUITY_CURRENT.md` + `docs
 
 ## NEXT único
 
-**SIGUIENTE: preparar una única QA final con AutoCAD real:** usar la evidencia F13 para distinguir pruebas sintéticas del producto y preparar un entorno Windows interactivo con AutoCAD autorizado, snapshot de restauración, AVG activo, registro de conexiones, prueba UAC y rollback/reinicio. Solo entonces evaluar la evidencia de las diez puertas; si WebView2 sigue sin solución exclusiva, mantener ese objetivo como BLOCKED y plantear una decisión de alcance explícita, **sin declarar éxito falso**. No pedir tests por módulos al usuario, no merge ni Release hasta decisión basada en evidencias.
+**SIGUIENTE: ejecutar una única QA final con AutoCAD real en LAB aislado cuando esté disponible:** usar la evidencia F13 para distinguir pruebas sintéticas del producto y preparar un entorno Windows interactivo con AutoCAD autorizado, snapshot de restauración, AVG activo, registro de conexiones, prueba UAC y rollback/reinicio. Solo entonces evaluar la evidencia de las diez puertas; si WebView2 sigue sin solución exclusiva, mantener ese objetivo como BLOCKED y plantear una decisión de alcance explícita, **sin declarar éxito falso**. No pedir tests por módulos al usuario, no merge ni Release hasta decisión basada en evidencias.
+
+
+## F17 — protocolo QA integrada (2026-10-21)
+- Rama `fix/f17-integrated-qa-protocol` apilada sobre F16, sin merge, release ni pruebas con AutoCAD real.
+- `tools/Invoke-ParcheCADF17.ps1`: solo lectura; `Before`, `After` y `Evaluate`, con carpetas distintas y bloqueo de sobrescritura; reutiliza F0 y F12; exige GeneratedAt posterior y SHA256 distinto (no certifica mismo equipo), no aplica firewall ni aprueba RC1.
+- `docs/F17_PROTOCOLO_QA_INTEGRADA.md`: sesión única de laboratorio, evidencia TCP/UDP IPv4/IPv6, servicios, WebView2 compartido, GUI/UAC, AVG y reinicio/rollback.
+- `tests/F17.Session.Tests.ps1`: fixtures de evaluación de 10 puertas y rechazo fail-closed. CI #137 del HEAD anterior verde; revalidar HEAD tras tests PS7, smoke Windows Before/After/Evaluate y ZIP F17 extraído.
+- **QA de reconstrucción adicional:** `tests/F17.RealWindows.Integration.ps1` en Windows efímero verifica las tres operaciones read-only, y `tests/F6.Package.Tests.ps1` ejecuta F17 desde ZIP extraído con informes sintéticos; F17 fixtures también en PS7. Sin AutoCAD real y sin RC1.
+- **NEXT:** verificar CI del HEAD final y ejecutar sesión única LAB solo cuando exista VM Windows con AutoCAD legítimo; RC1 sigue BLOCKED.
+
+
+## F17 — monitor temporal integrado (solicitud del 21 de octubre)
+- **Decisión operativa:** permitir una unica prueba en el PC del usuario. No requerir VM como primer paso ni repartir pruebas modulares. No añadir un sistema separado de reglas.
+- `src/ParcheCAD.Monitor.ps1`: consulta unicamente `Get-PCADProcesses`, `Get-PCADConnections` y `Get-PCADWebViewHost`; periodo limitado, registro de aparicion/no observacion y TCP/UDP endpoint. No toca firewall, servicios, antivirus, tareas ni WebView2. No conserva IP, rutas, comandos, tokens o URLs.
+- Panel WinForms: iniciar monitor / detener y generar log con hijo propiedad del panel. Continuar usando Apply/Rollback sujetos a sus confirmaciones habituales. Cierre de panel espera que el monitor finalice sin matar programas ajenos.
+- `tests/Monitor.Tests.ps1`: smoke Windows solo lectura, peticion Stop, proteccion contra sobrescribir sesion y salida parcial; PS5.1 y PS7. F6 prueba monitor extraido del ZIP.
+- **Limitacion:** monitor es sondeo, no packet capture ni Windows Filtering Platform: no prueba ausencia de trafico, intentos bloqueados o no ejecucion de WebView2. Las banderas de certificacion siguen false.
+- **NEXT unico:** verificar CI del HEAD final, ofrecer el ZIP DEV para prueba unica controlada y examinar el informe local sanitizado para identificar fallos reales. No merge/release ni RC1 por CI.
