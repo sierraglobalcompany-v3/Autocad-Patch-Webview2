@@ -87,7 +87,7 @@ function New-PCADRulePlan {
             $ruleName=Get-PCADRuleName -Program $path
             $item=[pscustomobject]@{
                 RuleName=$ruleName;Group='PCAD4_MANAGED';Year=$year
-                Program=$path;DisplayName=('ParcheCAD 4.0 | AutoCAD '+$year+' | '+[IO.Path]::GetFileName($path))
+                Program=$path;DisplayName=('ParcheCAD 4.0 - AutoCAD '+$year+' - '+[IO.Path]::GetFileName($path))
                 Direction='Outbound';Action='Block';Profile='Any'
                 Existing='NO_COMPROBADO';Assessment='CANDIDATO'
             }
