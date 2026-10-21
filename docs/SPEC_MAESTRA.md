@@ -1,5 +1,5 @@
 # SPEC MAESTRA — ParcheCAD 4.0
-**Estado:** F0–F11 en desarrollo con QA Windows y ZIP DEV reproducible, no RC ni release · **Repositorio:** sierraglobalcompany-v3/Autocad-Patch-Webview2 · **Fecha:** 2026-10-20
+**Estado:** F0–F12 en desarrollo con QA Windows y ZIP DEV reproducible, no RC ni release · **Repositorio:** sierraglobalcompany-v3/Autocad-Patch-Webview2 · **Fecha:** 2026-10-20
 
 ## Objetivo y definiciones de éxito
 Inventariar AutoCAD 2023–2027, sus ejecutables y servicios, procesos WebView2, reglas de firewall y conexiones. Evaluar aislamiento de conexiones de Autodesk, aceptando pérdida de funciones en línea, sin afectar WebView2 de WhatsApp/Outlook.
@@ -114,4 +114,14 @@ Nunca deshabilitar AVG/Defender, añadir exclusiones, evadir alertas, eliminar l
 - Microsoft documenta que los procesos WebView2 pueden compartir `CoreWebView2Environment` y UDF; el Firewall por ruta de programa no provee una selectividad automática por anfitrión para un mismo `msedgewebview2.exe`. No usar bloqueo global del runtime, ACL ni cambios en licencias como atajos.
 - QA fixtures PS5.1/7 y diagnóstico integrado WinForms, además de firewall temporal y ZIP reproducible. Evidencia F11: `docs/F11_MATRIZ_COBERTURA_WEBVIEW2.md`.
 
-**NEXT: F12 — protocolo de QA en VM Windows con escritorio interactivo, AutoCAD real, tráfico y UAC/reinicio; después decidir RC1. PRs Draft, sin merge ni release.**
+## F12 — evaluador de aceptación RC1 sin autoaprobación
+
+- `src/ParcheCAD.RCGates.ps1` evalúa dos reportes de diagnóstico `diagnostico.json` (antes y después), no modifica Windows, no crea una capa nueva de firewall ni altera el requisito de diez etapas.
+- Diez puertas: DIAGNOSTICOS, AUTOCAD_INSTALADO, REGLAS_SALIENTES, TRAFICO_AUTODESK, WEBVIEW2_AUTOCAD, OTRAS_APLICACIONES, GUI_UAC, REINICIO_Y_ROLLBACK, AVG_ACTIVO, AUTOCAD_FUNCIONAL.
+- Solo DIAGNOSTICOS puede acreditarse `PASS` por dos JSON coherentes, con recuperación sana y `Sections.Coverage` no certificada. La instalación puede quedar `OBSERVADO` y la regla `CONFIGURACION_OBSERVADA`; **estos estados NO son garantía de tráfico bloqueado**.
+- `Decision=BLOCKED`, `ProductionCertified=false`, `AllAutodeskTrafficBlockedVerified=false`, `WebViewIsolatedVerified=false` hasta recopilar evidencia física de cada puerta. Está prohibido derivar cumplimiento RC1 de CI verde.
+- `tools/Invoke-ParcheCADRC12.ps1` produce JSON y TXT con conteos y estado, sin rutas, IP ni líneas de comando privadas. No ejecuta Apply/Rollback, UAC, binarios AutoCAD ni cambios en servicios o antivirus.
+- QA PS5.1/7 con fixtures y en Windows real desechable: diagnóstico solo lectura seguido del evaluador (dos instantáneas iguales como smoke, **no prueba de antes/después**). Guía: `docs/F12_GATE_RC1_QA_INTEGRADA.md`.
+- Mantener las cuatro leyes KISS, anti-ruido, no parches, UX; corregir en origen con pruebas transversales. Sin WebView2 Microsoft global ni automatismos de licenciamiento.
+
+**NEXT: una única QA integrada de aceptación en Windows con escritorio auténticamente interactivo, AutoCAD instalado, AVG habilitado, trazas de red y reinicio; si no existe entorno/evidencia, RC1 sigue BLOCKED. PRs Draft, no merge ni release.**

@@ -1,4 +1,4 @@
-name: ParcheCAD Windows QA (F0-F11)
+name: ParcheCAD Windows QA (F0-F12)
 on:
   pull_request:
   push:
@@ -19,6 +19,7 @@ jobs:
           & .\tests\F7.Tests.ps1
           & .\tests\F8.UIState.Tests.ps1
           & .\tests\F11.Cobertura.Tests.ps1
+          & .\tests\F12.RCGates.Tests.ps1
       - name: Smoke F0 on clean Windows runner (read-only)
         shell: powershell
         timeout-minutes: 6
@@ -31,6 +32,12 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           & .\tests\F7.Diagnostico.Integration.ps1
+      - name: F12 release gate from real read-only Windows report (must be BLOCKED)
+        shell: powershell
+        timeout-minutes: 6
+        run: |
+          $ErrorActionPreference='Stop'
+          & .\tests\F12.RealWindows.Integration.ps1
       - name: WinForms construction and control safety smoke (no UI interaction)
         shell: powershell
         timeout-minutes: 3
@@ -66,6 +73,7 @@ jobs:
           & .\tests\F7.Tests.ps1
           & .\tests\F8.UIState.Tests.ps1
           & .\tests\F11.Cobertura.Tests.ps1
+          & .\tests\F12.RCGates.Tests.ps1
 
   f4-real-firewall-ephemeral:
     # Strictly hosted throwaway Windows VM; fixture is a copy of whoami.exe in TEMP.
