@@ -14,9 +14,8 @@ function Assert-PCADManagedEntry {
     if($null -eq $Entry){throw 'Falta entrada de regla.'}
     $program=Get-PCADCanonicalProgram -Path ([string]$Entry.Program)
     $year=[int]$Entry.Year
-    if($year -lt 2023 -or $year -gt 2027 -or $program -notmatch ('(?i)\\AutoCAD '+$year+'\\')) {
-        throw 'El ejecutable no corresponde a una instalacion AutoCAD 2023-2027.'
-    }
+    $installRoot=Get-PCADProperty -Object $Entry -Name 'InstallationRoot'
+    $program=Assert-PCADProgramInstallRoot -Program $program -Year $year -InstallRoot $installRoot -AllowMissing:$AllowMissingFile
     if([string]$Entry.RuleName -cne (Get-PCADRuleName -Program $program)) {throw 'ID de regla no corresponde al programa.'}
     if([string]$Entry.Group -cne 'PCAD4_MANAGED' -or [string]$Entry.Direction -cne 'Outbound' -or
         [string]$Entry.Action -cne 'Block' -or [string]$Entry.Profile -cne 'Any') {
@@ -74,7 +73,7 @@ function Invoke-PCADRollbackRules {
         }
         Write-PCADJournal -Journal $journal -File $JournalPath
     }
-    $remaining=@($journal.Operations|Where-Object {$_.State -in @('CREATED','ROLLBACK_ERROR')}).Count
+    $remaining=@($journal.Operations|Where-Object {$_.State -in @('CREATING','CREATED','ROLLBACK_ERROR')}).Count
     $journal.Status=if($remaining){'PARTIAL_ROLLBACK'}else{'ROLLED_BACK'}
     $journal.FinishedAt=(Get-Date).ToString('o')
     Write-PCADJournal -Journal $journal -File $JournalPath
@@ -110,6 +109,7 @@ function Invoke-PCADApplyPlan {
         if($status.State -eq 'CONFLICT'){throw ('Conflicto previo: '+[string]$e.RuleName)}
         $journal.Operations+= [pscustomobject]@{
             RuleName=[string]$e.RuleName;Group='PCAD4_MANAGED';Program=$path;Year=[int]$e.Year
+            InstallationRoot=(Get-PCADProperty -Object $e -Name 'InstallationRoot')
             Direction='Outbound';Action='Block';Profile='Any'
             DisplayName=[string]$e.DisplayName
             State=if($status.State -eq 'EXISTS_VALID'){'ALREADY_PRESENT'}else{'PENDING'}

@@ -8,9 +8,12 @@ $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot 'ParcheCAD.Historico.ps1')
 . (Join-Path $PSScriptRoot 'ParcheCAD.Network.ps1')
 . (Join-Path $PSScriptRoot 'ParcheCAD.Policy.ps1')
+. (Join-Path $PSScriptRoot 'ParcheCAD.Evidence.ps1')
 
 $started=Get-Date
 $sections=[ordered]@{}
+$privateInstallations=@()
+$privateCatalog=@()
 $checks=New-Object System.Collections.ArrayList
 $stages=@(
     @{Key='Installations';Label='AutoCAD 2023-2027'},
@@ -34,22 +37,35 @@ foreach ($stage in $stages) {
         $result=@()
         $stageStatus='OK';$stageDetail=''
         switch ($key) {
-            Installations {$result=@(Get-PCADInstallations);break}
+            Installations {
+                $privateInstallations=@(Get-PCADInstallations -InternalPaths)
+                $result=@($privateInstallations | ForEach-Object {ConvertTo-PCADSafeRecord -Record $_ -PathFields @('Path')})
+                break
+            }
             Processes {$result=@(Get-PCADProcesses);break}
             Services {$result=@(Get-PCADServices);break}
             Catalog {
-                $catalog=Get-PCADExecutableCatalog -Installations @($sections['Installations']) -Services @($sections['Services'])
-                $result=@($catalog.Entries)
+                $catalog=Get-PCADExecutableCatalog -Installations $privateInstallations -Services @($sections['Services']) -InternalPaths
+                $privateCatalog=@($catalog.Entries)
+                $result=@($privateCatalog | ForEach-Object {ConvertTo-PCADSafeRecord -Record $_ -PathFields @('Path','InstallationRoot')})
                 $sections['CatalogWarnings']=@($catalog.Warnings)
                 if($catalog.Status -ne 'OK'){$stageStatus='PARCIAL';$stageDetail='Catalogo limitado; ver CatalogWarnings'}
                 break
             }
             Firewall {$result=@(Get-PCADFirewall);break}
             Tasks {$result=@(Get-PCADTasks);break}
-            Historico {$result=@(Get-PCADLegacyOverview -Firewall @($sections['Firewall']) -Tasks @($sections['Tasks']));break}
+            Historico {
+                $journalDirectory=Join-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'informes') 'operaciones'
+                $result=@(Get-PCADLegacyOverview -Firewall @($sections['Firewall']) -Tasks @($sections['Tasks']) -JournalDirectory $journalDirectory)
+                break
+            }
             Connections {$result=@(Get-PCADConnections -Processes @($sections['Processes']));break}
             NetworkOverview {$result=@(Get-PCADNetworkOverview -Processes @($sections['Processes']) -Connections @($sections['Connections']));break}
-            PolicyPreview {$result=@(New-PCADRulePlan -Catalog @($sections['Catalog']) -CheckExisting);break}
+            PolicyPreview {
+                $internalPlan=New-PCADRulePlan -Catalog $privateCatalog -CheckExisting
+                $result=@(ConvertTo-PCADSafePlan -Plan $internalPlan)
+                break
+            }
         }
         $sections[$key]=@($result)
         [void]$checks.Add([pscustomobject]@{
@@ -73,7 +89,7 @@ Write-Progress -Activity 'ParcheCAD 4.0 / Diagnostico de solo lectura' -Complete
 $errors=@($checks | Where-Object {$_.Status -ne 'OK'}).Count
 $overall=if($errors -gt 0){'PARCIAL_NO_VERIFICADO'}else{'DIAGNOSTICO_COMPLETADO_SIN_CAMBIOS'}
 $report=[ordered]@{
-    SchemaVersion=1;Tool='ParcheCAD';Phase='F0';ReadOnly=$true
+    SchemaVersion=1;Tool='ParcheCAD';Phase='F0-F5_DIAGNOSTICO';ReadOnly=$true
     GeneratedAt=(Get-Date).ToString('yyyy-MM-ddTHH:mm:sszzz')
     Result=$overall;ElapsedSeconds=[math]::Round(((Get-Date)-$started).TotalSeconds,2)
     Limit='Inventario puntual; NO verifica bloqueo total de trafico ni ausencia de WebView2.'
@@ -94,7 +110,7 @@ if (!$NoExport) {
         $utf8=New-Object System.Text.UTF8Encoding($false)
         [IO.File]::WriteAllText((Join-Path $folder 'diagnostico.json'),($report | ConvertTo-Json -Depth 9),$utf8)
         $lines=New-Object System.Collections.Generic.List[string]
-        $lines.Add('ParcheCAD 4.0 F0 - SOLO LECTURA')
+        $lines.Add('ParcheCAD 4.0 - DIAGNOSTICO SOLO LECTURA')
         $lines.Add(('Resultado: {0}' -f $overall))
         $lines.Add(('Fecha: {0}' -f $report.GeneratedAt))
         $lines.Add('')

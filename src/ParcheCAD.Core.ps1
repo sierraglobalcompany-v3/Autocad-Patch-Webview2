@@ -21,6 +21,8 @@ function Get-PCADProperty {
     return [string]$p.Value
 }
 function Get-PCADInstallations {
+    [CmdletBinding()]
+    param([switch]$InternalPaths)
     $candidates=New-Object System.Collections.ArrayList
     foreach ($reg in @(
         'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
@@ -67,7 +69,7 @@ function Get-PCADInstallations {
             try { $signature=[string](Get-AuthenticodeSignature -LiteralPath $exe -ErrorAction Stop).Status } catch {}
         }
         [void]$out.Add([pscustomobject]@{
-            Year=$c.Year; Product=$c.Product; Path=(Protect-PCADPath $exe)
+            Year=$c.Year; Product=$c.Product; Path=$(if($InternalPaths){$exe}else{Protect-PCADPath $exe})
             Evidence=$c.Evidence; FileFound=$found
             Status=$(if ($found) {'ENCONTRADO'} else {'SOLO_REGISTRO'})
             FileVersion=$version; Publisher=$publisher; Signature=$signature

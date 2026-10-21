@@ -41,7 +41,8 @@ function Get-PCADExecutableCatalog {
         [AllowEmptyCollection()][object[]]$Installations=@(),
         [AllowEmptyCollection()][object[]]$Services=@(),
         [int]$MaxFilesPerProduct=900,
-        [int]$MaxDepth=7
+        [int]$MaxDepth=7,
+        [switch]$InternalPaths
     )
     $rows=New-Object System.Collections.ArrayList
     $notes=New-Object System.Collections.ArrayList
@@ -81,7 +82,8 @@ function Get-PCADExecutableCatalog {
                     $seen[$key]=$true
                     $classification=Get-PCADFileClass -FilePath $child.FullName -InstallationRoot $root -Year $year
                     [void]$rows.Add([pscustomobject]@{
-                        Year=$year;Name=$child.Name;Path=(Protect-PCADPath $child.FullName)
+                        Year=$year;Name=$child.Name;Path=$(if($InternalPaths){$child.FullName}else{Protect-PCADPath $child.FullName})
+                        InstallationRoot=$(if($InternalPaths){$root}else{Protect-PCADPath $root})
                         Classification=$classification.Classification
                         Confidence=$classification.Confidence;Impact=$classification.Impact
                         Rationale=$classification.Rationale
@@ -109,6 +111,7 @@ function Get-PCADExecutableCatalog {
         $classification=Get-PCADFileClass -FilePath $path -Kind 'SHARED'
         [void]$rows.Add([pscustomobject]@{
             Year=0;Name=[string]$svc.Name;Path=(Protect-PCADPath $path)
+            InstallationRoot=''
             Classification=$classification.Classification
             Confidence=$classification.Confidence;Impact=$classification.Impact
             Rationale=$classification.Rationale
