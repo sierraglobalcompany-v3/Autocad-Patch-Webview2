@@ -121,17 +121,18 @@ function PCAD-Finish {
     $historical=@(Get-PCADReportRows -Object $ui.Sections -Name 'Historico')
     if($historical.Count -gt 0 -and $null -ne $historical[0]){
         $h=$historical[0]
-        $rules.Text=("Firewall Autodesk: {0}; WebView2 global: {1}; tareas sospechosas: {2}" -f
-          (Get-PCADReportField -Object $h -Name 'AutoCADAndAutodeskActiveRules'),
-          (Get-PCADReportField -Object $h -Name 'WebView2ActiveRules'),
-          (Get-PCADReportField -Object $h -Name 'SuspectedTasks'))
+        $countAutodesk=Get-PCADReportField -Object $h -Name 'AutoCADAndAutodeskActiveRules'
+        $countWebView=Get-PCADReportField -Object $h -Name 'WebView2ActiveRules'
+        $countTasks=Get-PCADReportField -Object $h -Name 'SuspectedTasks'
+        $rules.Text=("Firewall Autodesk: {0}; WebView2 global: {1}; tareas sospechosas: {2}" -f $countAutodesk,$countWebView,$countTasks)
     }
     $status.Text=$ui.Description
     $status.ForeColor=$(if($ui.Complete){[Drawing.Color]::ForestGreen}else{[Drawing.Color]::Firebrick})
     $progressLabel.Text=("Terminado en {0}s; informe guardado." -f (Get-PCADReportField -Object $data -Name 'ElapsedSeconds'))
     $lines=New-Object System.Collections.Generic.List[string]
     $lines.Add(("Resultado: {0}" -f $ui.Result))
-    $lines.Add(("Catalogo: {0} ejecutables" -f @(Get-PCADReportRows -Object $ui.Sections -Name 'Catalog').Count))
+    $catalogRows=@(Get-PCADReportRows -Object $ui.Sections -Name 'Catalog')
+    $lines.Add(("Catalogo: {0} ejecutables" -f $catalogRows.Count))
     $network=@(Get-PCADReportRows -Object $ui.Sections -Name 'NetworkOverview')
     if($network.Count -gt 0 -and $null -ne $network[0]) {
         $lines.Add(('Atribucion F3: {0} WebView2 observados, {1} AutoCAD probable(s), aislamiento NO VERIFICADO' -f $network[0].TotalWebView2,$network[0].ProbableAutoCAD))
@@ -140,18 +141,20 @@ function PCAD-Finish {
     if($preview.Count -gt 0 -and $null -ne $preview[0]) {
         $lines.Add(('Vista previa F4: {0} reglas candidatas, {1} conflictos, {2} excluidos; NINGUNA regla aplicada' -f $preview[0].Count,$preview[0].Conflicts,@($preview[0].Excluded).Count))
     }
-    foreach($c in $ui.Checks){$lines.Add(("{0}: {1} ({2}) {3}" -f
-       (Get-PCADReportField -Object $c -Name 'Section'),
-       (Get-PCADReportField -Object $c -Name 'Status'),
-       (Get-PCADReportField -Object $c -Name 'Count'),
-       (Get-PCADReportField -Object $c -Name 'Detail')))}
+    foreach($c in $ui.Checks){
+        $cSection=Get-PCADReportField -Object $c -Name 'Section'
+        $cStatus=Get-PCADReportField -Object $c -Name 'Status'
+        $cCount=Get-PCADReportField -Object $c -Name 'Count'
+        $cDetail=Get-PCADReportField -Object $c -Name 'Detail'
+        $lines.Add(("{0}: {1} ({2}) {3}" -f $cSection,$cStatus,$cCount,$cDetail))
+    }
     if($null -ne $ui.Recovery){
         $rec=$ui.Recovery
-        $lines.Add(('Recuperacion: {0} reglas registradas activas (NO VERIFICADAS), {1} operaciones por revisar, {2} respaldos invalidos / lectura {3}' -f
-           (Get-PCADReportField -Object $rec -Name 'ActiveRules'),
-           (Get-PCADReportField -Object $rec -Name 'NeedsReview'),
-           (Get-PCADReportField -Object $rec -Name 'Unverified'),
-           (Get-PCADReportField -Object $rec -Name 'Status'))
+        $active=Get-PCADReportField -Object $rec -Name 'ActiveRules'
+        $review=Get-PCADReportField -Object $rec -Name 'NeedsReview'
+        $invalid=Get-PCADReportField -Object $rec -Name 'Unverified'
+        $recStatus=Get-PCADReportField -Object $rec -Name 'Status'
+        $lines.Add(("Recuperacion: {0} reglas registradas (NO VERIFICADAS), {1} operaciones por revisar, {2} respaldos invalidos / lectura {3}" -f $active,$review,$invalid,$recStatus))
     }
     $lines.Add('WebView2 de AutoCAD aislado: NO VERIFICADO.')
     $lines.Add(("Informe: {0}" -f $file))
@@ -234,10 +237,10 @@ $preview.Add_Click({
     if(!$ui.CanPreview){return}
     $p=$ui.Plan
     $nl=[Environment]::NewLine
-    $msg=('Candidatas: {0} / conflictos: {1} / excluidos: {2}' -f
-        (Get-PCADReportField -Object $p -Name 'Count'),
-        (Get-PCADReportField -Object $p -Name 'Conflicts'),
-        @(Get-PCADReportRows -Object $p -Name 'Excluded').Count)+$nl+'WebView2 compartido excluido; tambien puede afectar LAN.'
+    $candidate=Get-PCADReportField -Object $p -Name 'Count'
+    $conflicts=Get-PCADReportField -Object $p -Name 'Conflicts'
+    $excluded=@(Get-PCADReportRows -Object $p -Name 'Excluded')
+    $msg=('Candidatas: {0} / conflictos: {1} / excluidos: {2}' -f $candidate,$conflicts,$excluded.Count)+$nl+'WebView2 compartido excluido; tambien puede afectar LAN.'
     [void][Windows.Forms.MessageBox]::Show($msg,'Vista previa F4')
 })
 $apply.Add_Click({
