@@ -3,3 +3,6 @@ informes/
 *.tmp
 *.bak
 *.log
+
+# Artefactos de desarrollo con hashes
+dist/
