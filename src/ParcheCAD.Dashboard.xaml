@@ -52,7 +52,7 @@
    <Setter Property="Foreground" Value="{StaticResource Ink}"/><Setter Property="FontSize" Value="28"/><Setter Property="FontWeight" Value="Bold"/>
   </Style>
  </Window.Resources>
- <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+ <ScrollViewer Background="#F5F7FB" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
   <Grid Margin="28,22,28,18">
    <Grid.RowDefinitions>
     <RowDefinition Height="Auto"/><RowDefinition Height="20"/>

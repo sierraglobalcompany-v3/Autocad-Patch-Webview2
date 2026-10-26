@@ -23,7 +23,7 @@ $window.FindName('TxtFirewall').Text='Instalaciones: 1 | Candidatas: 31 | Confli
 'Estos valores son una muestra visual, NO una captura del equipo del usuario.'+[Environment]::NewLine+
 'VISTA PREVIA. Ninguna regla aplicada. WebView2 compartido excluido.'
 $window.FindName('Progress').Value=100
-$width=1110;$height=870
+$width=1110;$height=1000
 $visual=$window.Content
 $visual.Measure([Windows.Size]::new($width,$height))
 $visual.Arrange([Windows.Rect]::new(0,0,$width,$height))
