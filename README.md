@@ -81,3 +81,8 @@ Panel WinForms reordenado: acciones agrupadas; estado del diagnostico independie
 **Auditoria WebView2 independiente:** boton Auditar WebView2 ejecuta una instantanea solo lectura, atribuye anfitrion como probable/indeterminado y lista por que el runtime compartido NO puede bloquearse selectivamente con una regla persistente por PID. Monitor continuo temporal separado. No se generan reglas WebView2.
 
 Interfaz 4.2: tarjetas y botones con jerarquia, paneles blancos, y pestañas separadas. Ver docs/V42_ARQUITECTURA_QA.md.
+
+
+### ParcheCAD 4.2 — Vista previa de reglas sin bloquear el panel
+
+`VER REGLAS AUTOCAD` usa `src/ParcheCAD.Preview.ps1` en un proceso PowerShell hijo de **solo lectura**. El inventario por carpetas y las consultas `Get-NetFirewallRule` ya no se ejecutan en el hilo WinForms. El panel muestra barra animada (Marquee), etapa 1/3–3/3 y segundos transcurridos; permite cancelar exclusivamente su proceso hijo sin afectar AutoCAD ni el firewall. El archivo `informes/preview_*/preview.json` confirma estado, candidatos y conflictos sin rutas privadas ni reglas creadas. Aplicar conserva las comprobaciones del motor, UAC, confirmación y recuperación. No inferir porcentaje de una fase. QA F9 y F6; RC1 pendiente en Windows del usuario.

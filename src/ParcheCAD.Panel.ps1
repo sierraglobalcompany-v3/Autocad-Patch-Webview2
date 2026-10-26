@@ -25,6 +25,8 @@ $script:MonitorStopRequested=$false
 $script:MonitorErr=''
 $script:RunMode='WEBVIEW'
 $script:WebRunner=Join-Path $PSScriptRoot 'ParcheCAD.WebViewAudit.ps1'
+$script:PreviewRunner=Join-Path $PSScriptRoot 'ParcheCAD.Preview.ps1'
+$script:PreviewStage=''
 # CI fixture only: never execute an administrative command or change the firewall.
 if($InteractionSelfTest -and ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hosted')) {
     throw 'InteractionSelfTest requires an ephemeral GitHub-hosted Windows runner.'
@@ -246,6 +248,46 @@ function PCAD-Finish {
     $script:LastExitCode=$code
     PCAD-Busy $false
     $bar.Style='Continuous';$bar.Value=100
+    $bar.MarqueeAnimationSpeed=0
+    if($script:RunMode -eq 'PREVIEW'){
+        $previewFile=Join-Path $script:RunRoot 'preview.json'
+        $result=$null
+        if($code -eq 0 -and (Test-Path -LiteralPath $previewFile -PathType Leaf)){
+            try {$result=Get-Content -LiteralPath $previewFile -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop}catch{}
+        }
+        $valid=($null -ne $result -and
+            [string]$result.Schema -ceq 'PCAD_AUTOCAD_PREVIEW_1' -and
+            [string]$result.Tool -ceq 'ParcheCAD' -and
+            $result.ReadOnly -eq $true -and
+            $result.NoFirewallChanges -eq $true -and
+            $result.WebView2SharedExcluded -eq $true -and
+            [string]$result.Status -in @('PREVIEW_COMPLETA','PREVIEW_PARCIAL') -and
+            [int]$result.Installations -ge 0 -and
+            [int]$result.Candidates -ge 0 -and
+            [int]$result.Conflicts -ge 0 -and
+            [int]$result.Excluded -ge 0)
+        if($valid){
+            $installed.Text=('AutoCAD detectados: '+$(if(@($result.Years).Count){@($result.Years) -join ', '}else{'ninguno'}))
+            $rules.Text=('Reglas candidatas: {0} | conflictos: {1}' -f $result.Candidates,$result.Conflicts)
+            $message=('Instalaciones: {0}; candidatas: {1}; conflictos: {2}; excluidas: {3}' -f
+                $result.Installations,$result.Candidates,$result.Conflicts,$result.Excluded)+
+                [Environment]::NewLine+('Catalogo: '+$result.CatalogStatus)+
+                [Environment]::NewLine+'VISTA PREVIA SOLO LECTURA; WebView2 compartido excluido.'+
+                [Environment]::NewLine+'No se aplicaron reglas.'
+            $progressLabel.Text='Vista previa AutoCAD terminada; resultados guardados.'
+            $status.Text=if($result.Status -eq 'PREVIEW_COMPLETA'){'Vista previa lista; sin cambios en firewall.'}else{'ATENCION: catalogo parcial; NO aplicar.'}
+            $status.ForeColor=if($result.Status -eq 'PREVIEW_COMPLETA'){[Drawing.Color]::ForestGreen}else{[Drawing.Color]::DarkOrange}
+            $operationInfo.Text=('Candidatas: '+$result.Candidates+' | Conflictos: '+$result.Conflicts)
+            if(!$InteractionSelfTest){[void][Windows.Forms.MessageBox]::Show($message,'Ver reglas AutoCAD','OK','Information')}
+        }else{
+            $status.Text='ERROR: la vista previa no se completo; no se crearon reglas.'
+            $status.ForeColor=[Drawing.Color]::Firebrick
+            $progressLabel.Text='Vista previa fallida; comprueba el informe.'
+            if(!$InteractionSelfTest){[void][Windows.Forms.MessageBox]::Show(('Vista previa incompleta. Revisa '+$script:LogErr),'ParcheCAD','OK','Warning')}
+        }
+        PCAD-Busy $false
+        return
+    }
     if($script:RunMode -eq 'WEBVIEW'){
         $scan=Join-Path $script:RunRoot 'webview-audit.json'
         $audit=$null
@@ -495,6 +537,19 @@ $timer.Add_Tick({
     }
     if($null -eq $script:Proc){return}
     $elapsed=[int]((Get-Date)-$script:Started).TotalSeconds
+    if($script:RunMode -eq 'PREVIEW'){
+        # No inventar porcentajes: trabajo de catalogo/NetSecurity de duracion variable.
+        # Marquee indica actividad y la fase + segundos transcurridos confirman avance.
+        $phase=PCAD-ReadLog $script:PreviewStage
+        if(!$phase){$phase='Iniciando vista previa AutoCAD...'}
+        $progressLabel.Text=($phase+' | '+$elapsed+' s')
+        $status.Text='Consultando ejecutables y reglas, sin modificar Windows. CANCELAR disponible.'
+        $bar.Style='Marquee'
+        $bar.MarqueeAnimationSpeed=25
+        $script:Proc.Refresh()
+        if($script:Proc.HasExited){PCAD-Finish}
+        return
+    }
     $log=PCAD-ReadLog $script:LogOut
     $hits=[regex]::Matches($log,'\[(\d+)/(\d+)\]\s*([^\r\n]+)')
     if($hits.Count -gt 0){
@@ -580,27 +635,40 @@ function PCAD-LaunchAdmin([string]$Mode,[string]$Manifest=''){
         [void][Windows.Forms.MessageBox]::Show($_.Exception.Message,'No se inicio la operacion')
     }
 }
-$preview.Add_Click({
+function PCAD-PreviewBegin {
+    # Read-only child; NEVER perform filesystem walks or firewall enumeration on WinForms UI thread.
     if($null -ne $script:Proc -or $null -ne $script:AdminProc){return}
     try {
-        # Previsualizar listado de EXE AutoCAD y filtros, NO analizar conexiones.
-        . (Join-Path $PSScriptRoot 'ParcheCAD.Core.ps1')
-        . (Join-Path $PSScriptRoot 'ParcheCAD.Catalogo.ps1')
-        . (Join-Path $PSScriptRoot 'ParcheCAD.Policy.ps1')
-        $inst=@(Get-PCADInstallations -InternalPaths | Where-Object {$_.FileFound})
-        $cat=Get-PCADExecutableCatalog -Installations $inst -SharedRoots @() -InternalPaths
-        $plan=New-PCADRulePlan -Catalog @($cat.Entries) -CheckExisting
-        $years=@($inst|ForEach-Object {$_.Year}|Sort-Object -Unique)
-        $installed.Text=('AutoCAD detectados: '+$(if($years.Count){$years -join ', '}else{'ninguno'}))
-        $rules.Text=('Reglas candidatas: '+$plan.Count+' | conflictos: '+$plan.Conflicts)
-        $msg=('Instalaciones: {0}; candidatas: {1}; conflictos: {2}; excluidas: {3}' -f
-            $inst.Count,$plan.Count,$plan.Conflicts,@($plan.Excluded).Count)+
-            [Environment]::NewLine+'Vista previa de solo lectura; WebView2 compartido excluido.'
-        [void][Windows.Forms.MessageBox]::Show($msg,'Ver reglas AutoCAD','OK','Information')
+        if(!(Test-Path -LiteralPath $script:PreviewRunner -PathType Leaf)){
+            throw 'No se encontro el modulo de vista previa AutoCAD.'
+        }
+        if(!(Test-Path -LiteralPath $script:Reports -PathType Container)){
+            $null=New-Item -ItemType Directory -Path $script:Reports -Force -ErrorAction Stop
+        }
+        $script:RunRoot=Join-Path $script:Reports ('preview_'+[guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $script:RunRoot -ErrorAction Stop | Out-Null
+        $script:LogOut=Join-Path $script:RunRoot 'salida.log'
+        $script:LogErr=Join-Path $script:RunRoot 'errores.log'
+        $script:ExitMarker=Join-Path $script:RunRoot 'preview.exitcode'
+        $script:PreviewStage=Join-Path $script:RunRoot 'preview.fase.txt'
+        $script:RunMode='PREVIEW'
+        $arguments='-NoLogo -NoProfile -ExecutionPolicy Bypass -File "{0}" -OutputDirectory "{1}"' -f $script:PreviewRunner,$script:RunRoot
+        $script:Proc=Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList $arguments -WindowStyle Hidden -RedirectStandardOutput $script:LogOut -RedirectStandardError $script:LogErr -PassThru -ErrorAction Stop
+        $script:Started=Get-Date
+        PCAD-Busy $true
+        $bar.Style='Marquee';$bar.MarqueeAnimationSpeed=25
+        $status.Text='Leyendo instalaciones y reglas AutoCAD (sin cambios)...'
+        $status.ForeColor=[Drawing.Color]::DarkBlue
+        $progressLabel.Text='Iniciando vista previa AutoCAD...'
+        $timer.Start()
     }catch{
-        [void][Windows.Forms.MessageBox]::Show(('Vista previa no verificable: '+$_.Exception.Message),'ParcheCAD','OK','Warning')
+        PCAD-Busy $false
+        $status.Text='No se pudo iniciar la vista previa AutoCAD'
+        $status.ForeColor=[Drawing.Color]::Firebrick
+        [void][Windows.Forms.MessageBox]::Show($_.Exception.Message,'ParcheCAD','OK','Error')
     }
-})
+}
+$preview.Add_Click({PCAD-PreviewBegin})
 $apply.Add_Click({
     if($null -ne $script:Proc -or $null -ne $script:AdminProc){return}
     if(!(Test-Path -LiteralPath (Join-Path $PSScriptRoot 'ParcheCAD.Reglas.ps1') -PathType Leaf)){return}
@@ -657,6 +725,7 @@ $cancel.Add_Click({
     PCAD-Busy $false
     $bar.Style='Continuous';$bar.Value=0
     $status.Text='CANCELADO. No se modifico el firewall.'
+    $progressLabel.Text='Consulta cancelada; el proceso de vista previa se detuvo.'
     $status.ForeColor=[Drawing.Color]::DarkRed
 })
 $exit.Add_Click({$form.Close()})
@@ -733,6 +802,24 @@ if($InteractionSelfTest){
             throw 'F11: diagnostic child/UI did not expose honest coverage matrix'
         }
         Write-Host ('F9 PASS: Analyze handler -> read-only Windows child -> report -> safe status ({0}).' -f $ui.Result)
+        # F42: Preview is asynchronous; the GUI click must return immediately,
+        # show a marquee, and yield its result only after the owned child exits.
+        $previewLaunch=[Diagnostics.Stopwatch]::StartNew()
+        Invoke-PCADClick -Button $preview
+        $previewLaunch.Stop()
+        if($previewLaunch.Elapsed.TotalSeconds -gt 5 -or $null -eq $script:Proc -or
+           $script:RunMode -cne 'PREVIEW' -or $bar.Style -ne 'Marquee' -or
+           !$cancel.Enabled -or $apply.Enabled){
+            throw 'F42: preview blocked WinForms UI or failed to start cancellable child'
+        }
+        if(!$script:Proc.WaitForExit(65000)){throw 'F42: preview child exceeded 65 seconds on clean runner'}
+        PCAD-Finish
+        if($null -ne $script:Proc -or !$apply.Enabled -or
+           $status.Text -notmatch 'Vista previa' -or $progressLabel.Text -notmatch 'terminada' -or
+           $rules.Text -notmatch 'Reglas candidatas:'){
+            throw 'F42: preview did not restore UI or present verified results'
+        }
+        Write-Host 'PASS F42: preview click responsive, worker report validated, no firewall action.' -ForegroundColor Green
 
         Write-Host 'F9: dispatch Cancel handler against an owned dummy sleeping process.'
         $unrelated=Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList '-NoLogo -NoProfile -Command "Start-Sleep -Seconds 30"' -PassThru -WindowStyle Hidden -ErrorAction Stop
@@ -821,6 +908,7 @@ if($SelfTest){
     if(!$apply.Enabled -or !$monitorStart.Enabled -or $monitorStop.Enabled){throw 'V42: no se puede iniciar firewall directo sin auditoria WebView2'}
     if(!$form.Controls.Contains($tabs) -or !$diagnosticTab.Controls.Contains($details) -or !$monitorTab.Controls.Contains($monitorDetails)){throw 'V41: diagnostico y monitor no separados'}
     if($form.Text -notmatch '4\.2' -or $start.Text -notmatch 'WEBVIEW2'){throw 'V42: version o flujo WebView2 incorrecto'}
+    if(!(Test-Path -LiteralPath $script:PreviewRunner -PathType Leaf)){throw 'Preview background worker no incluido'}
     $script:LastReport.Result='DIAGNOSTICO_COMPLETADO_SIN_CAMBIOS'
     PCAD-Busy $false
     if(!$apply.Enabled){throw 'V42: auditoria WebView2 no debe bloquear firewall directo'}

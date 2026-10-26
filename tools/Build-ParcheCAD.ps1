@@ -15,6 +15,7 @@ $items=@(
     'src/ParcheCAD.Network.ps1',
     'src/ParcheCAD.Monitor.ps1',
     'src/ParcheCAD.WebViewAudit.ps1',
+    'src/ParcheCAD.Preview.ps1',
     'src/ParcheCAD.Cobertura.ps1',
     'src/ParcheCAD.RCGates.ps1',
     'src/ParcheCAD.Policy.ps1',

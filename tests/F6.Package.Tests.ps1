@@ -55,6 +55,7 @@ try {
                            'src\ParcheCAD.Diagnostico.ps1',
                            'src\ParcheCAD.Monitor.ps1',
         'src\ParcheCAD.WebViewAudit.ps1',
+        'src\ParcheCAD.Preview.ps1',
                            'docs\F17_PROTOCOLO_QA_INTEGRADA.md')){
         $p=Join-Path $unpacked $required
         if(!(Test-Path -LiteralPath $p -PathType Leaf)){throw ('F17 missing from extracted ZIP: '+$required)}
@@ -110,8 +111,8 @@ try {
     $cmd=Get-Content -LiteralPath (Join-Path $unpacked 'Abrir_ParcheCAD.cmd') -Raw
     $uiSrc=Get-Content -LiteralPath (Join-Path $unpacked 'src\ParcheCAD.Panel.ps1') -Raw
     if($cmd -notmatch 'ExecutionPolicy Bypass' -or $uiSrc -match 'ExecutionPolicy RemoteSigned' -or
-       @([regex]::Matches($uiSrc,'ExecutionPolicy Bypass')).Count -ne 4){
-        throw 'V42: launcher y cuatro procesos hijos no usan politica temporal.'
+       @([regex]::Matches($uiSrc,'ExecutionPolicy Bypass')).Count -ne 5){
+        throw 'V42: launcher y cinco procesos hijos no usan politica temporal.'
     }
     $psScripts=@(Get-ChildItem -LiteralPath (Join-Path $unpacked 'src') -Filter '*.ps1' -File)
     foreach($ps in $psScripts){
@@ -132,6 +133,23 @@ try {
        $audit.SafeBlockingCandidates -ne 0 -or @($audit.Entries | Where-Object {$_.AutomaticFirewallEligible -ne $false}).Count -gt 0){
         throw 'V42: auditoria invento un candidato bloqueable o afirmo modificar firewall'
     }
+    # F42: the ZIP must contain a functional and independently executable
+    # PREVIEW worker; it must return a marker and an explicitly read-only plan.
+    $previewDir=Join-Path $tmp 'AUTOCAD-PREVIEW-PACKAGED'
+    $null=New-Item -ItemType Directory -Path $previewDir -ErrorAction Stop
+    & $exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File (Join-Path $unpacked 'src\ParcheCAD.Preview.ps1') -OutputDirectory $previewDir
+    if($LASTEXITCODE -ne 0){throw 'F42: packaged preview worker failed.'}
+    $pr=Get-Content -LiteralPath (Join-Path $previewDir 'preview.json') -Raw | ConvertFrom-Json
+    $prCode=(Get-Content -LiteralPath (Join-Path $previewDir 'preview.exitcode') -Raw).Trim()
+    if($prCode -cne '0' -or $pr.Schema -cne 'PCAD_AUTOCAD_PREVIEW_1' -or
+       $pr.ReadOnly -ne $true -or $pr.NoFirewallChanges -ne $true -or
+       $pr.WebView2SharedExcluded -ne $true -or
+       $pr.Candidates -lt 0 -or $pr.Conflicts -lt 0 -or
+       $pr.Status -notin @('PREVIEW_COMPLETA','PREVIEW_PARCIAL')){
+        throw 'F42: preview output invalid or reports unsafe changes.'
+    }
+    $stage=Get-Content -LiteralPath (Join-Path $previewDir 'preview.fase.txt') -Raw
+    if($stage -notmatch '3/3'){throw 'F42: preview did not report phase completion.'}
     Write-Host ('PASS F6 package: deterministic SHA256, {0} files, extracted CLI, WinForms and F17 evidence' -f $verified) -ForegroundColor Green
 } finally {
     if(Test-Path -LiteralPath $tmp -PathType Container){Remove-Item -LiteralPath $tmp -Recurse -Force}
