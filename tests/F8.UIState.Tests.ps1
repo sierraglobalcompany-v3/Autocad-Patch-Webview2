@@ -30,8 +30,10 @@ Assert-F8 (!$none.Complete -and !$none.CanApply) 'no report must be invalid'
 $empty=Get-PCADReportUiState -Report ([pscustomobject]@{Result='DIAGNOSTICO_COMPLETADO_SIN_CAMBIOS'}) -ExitCode 0
 Assert-F8 (!$empty.Complete -and !$empty.CanApply) 'incomplete report denied'
 $good=New-F8GoodReport
+Assert-F8 ((Get-PCADApplyBlockReason -Ui $none) -match 'incompleto') 'V41: missing diagnosis reason'
 $ok=Get-PCADReportUiState -Report $good -ExitCode 0
 Assert-F8 ($ok.Complete -and $ok.CanApply -and $ok.CanPreview -and $ok.ChecksOK -and $ok.RecoveryOK) 'good 10 stage report'
+Assert-F8 ((Get-PCADApplyBlockReason -Ui $ok) -match '2 reglas') 'V41: ready description'
 $badExit=Get-PCADReportUiState -Report $good -ExitCode 2
 Assert-F8 (!$badExit.Complete -and !$badExit.CanApply) 'exit code contradicts report'
 $missingExit=Get-PCADReportUiState -Report $good
@@ -45,7 +47,11 @@ Assert-F8 (!$pending.CanApply -and !$pending.Complete) 'rollback pending must no
 $good.Sections.Historico[0].Recovery.Status='OK'
 $good.Sections.PolicyPreview[0].Conflicts=1
 Assert-F8 (!(Get-PCADReportUiState -Report $good -ExitCode 0).CanApply) 'plan collision'
+Assert-F8 ((Get-PCADApplyBlockReason -Ui (Get-PCADReportUiState -Report $good -ExitCode 0)) -match 'conflictos') 'V41: conflict explained'
 $good.Sections.PolicyPreview[0].Conflicts=0
+$good.Sections.PolicyPreview[0].Count=0
+Assert-F8 ((Get-PCADApplyBlockReason -Ui (Get-PCADReportUiState -Report $good -ExitCode 0)) -match 'no hay ejecutables') 'V41: zero candidates explained'
+$good.Sections.PolicyPreview[0].Count=2
 $good.Checks[0].Status='ERROR'
 Assert-F8 (!(Get-PCADReportUiState -Report $good -ExitCode 0).Complete) 'one stage error'
 $good.Checks[0].Status='OK'

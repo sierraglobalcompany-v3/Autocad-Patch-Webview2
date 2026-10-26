@@ -42,7 +42,8 @@ $items=@(
     'docs/F16_INTEGRIDAD_FILTROS_FIREWALL.md',
     'tools/Invoke-ParcheCADRC12.ps1',
     'tools/Invoke-ParcheCADF17.ps1',
-    'docs/F17_PROTOCOLO_QA_INTEGRADA.md'
+    'docs/F17_PROTOCOLO_QA_INTEGRADA.md',
+    'docs/V41_CAMBIOS_AUDITORIA.md'
 ) | Sort-Object
 foreach($name in $items){
     if($name -notmatch '^[a-zA-Z0-9_/.-]+$' -or $name -match '(?:^|/)\.\.(?:/|$)') {
@@ -54,7 +55,7 @@ foreach($name in $items){
 if(!(Test-Path -LiteralPath $OutputDirectory -PathType Container)){
     $null=New-Item -ItemType Directory -Path $OutputDirectory -Force -ErrorAction Stop
 }
-$zipName='ParcheCAD_4.0_DEV_NO_RELEASE.zip'
+$zipName='ParcheCAD_4.1_DEV_NO_RELEASE.zip'
 $zipFile=Join-Path $OutputDirectory $zipName
 Add-Type -AssemblyName System.IO.Compression -ErrorAction Stop
 $time=[DateTimeOffset]::Parse('2020-01-01T00:00:00+00:00')

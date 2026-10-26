@@ -79,3 +79,22 @@ function Get-PCADReportUiState {
         Plan=$plan;Recovery=$recovery;Sections=$sections;Checks=$checks
     }
 }
+
+# V4.1: descripcion humana del gate; CanApply permanece sin modificaciones.
+function Get-PCADApplyBlockReason {
+    [CmdletBinding()]
+    param($Ui,[switch]$Busy)
+    if($Busy){return 'Aplicar no disponible: consulta u operacion en curso.'}
+    if($null -eq $Ui -or !$Ui.Complete){
+        return 'Aplicar no disponible: diagnostico incompleto o sin resultado valido.'
+    }
+    if(!$Ui.RecoveryOK){return 'Aplicar no disponible: recuperacion de reglas pendiente de verificar.'}
+    if($null -eq $Ui.Plan){return 'Aplicar no disponible: sin vista previa de reglas.'}
+    if([int](Get-PCADReportField -Object $Ui.Plan -Name 'Conflicts') -gt 0){
+        return 'Aplicar no disponible: existen conflictos entre reglas.'
+    }
+    $count=[int](Get-PCADReportField -Object $Ui.Plan -Name 'Count')
+    if($count -le 0){return 'Aplicar no disponible: no hay ejecutables candidatos. Comprueba el catalogo.'}
+    if(!$Ui.CanApply){return 'Aplicar no disponible: plan de reglas no verificable.'}
+    return ('Listo: {0} reglas candidatas. Requiere UAC y confirmacion escrita.' -f $count)
+}
