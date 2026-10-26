@@ -67,3 +67,8 @@ La rama F17 incorpora `tools/Invoke-ParcheCADF17.ps1` para capturas de diagnóst
 ## Monitor temporal de AutoCAD/WebView2 (F17)
 
 El panel incorpora **INICIAR MONITOR** y **DETENER MONITOR Y GUARDAR LOG**. Tras iniciar, abrir y probar AutoCAD; el monitor lee procesos y conexiones TCP/endpoints UDP, permite seguir usando Apply/Rollback con las confirmaciones existentes y al detener genera `informes/monitor_*/monitor.json` y `resumen.txt`. Finaliza automaticamente a los 10 minutos si no se detiene manualmente. El informe no guarda IP, URLs, parametros ni rutas privadas. No instala servicios ni cambia firewall o antivirus. **El sondeo NO captura todo el trafico, ni verifica intentos de bloqueo o aislamiento de WebView2**; no confundir actividad observada con ausencia de red. Guía: `docs/F17_PROTOCOLO_QA_INTEGRADA.md`.
+
+
+## ParcheCAD 4.1 (DEV / NO RELEASE)
+
+Panel WinForms reordenado: acciones agrupadas; estado del diagnostico independiente del monitor; dos pestanas para informes; razon visible cuando Aplicar no cumple los gates. Mantiene las reglas de seguridad y excluye WebView2 compartido. El launcher y sus tres procesos hijos usan ExecutionPolicy Bypass temporal solamente en cada proceso; no ejecuta Set-ExecutionPolicy y las politicas empresariales GPO siguen prevaleciendo. Suite de paquete con ZIP extraido y marca de Internet Zone.Identifier. RC1 pendiente de prueba visual y AutoCAD real. Ver docs/V41_CAMBIOS_AUDITORIA.md.

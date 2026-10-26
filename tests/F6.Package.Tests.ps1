@@ -5,7 +5,7 @@ $ErrorActionPreference='Stop'
 $repo=Split-Path -Parent $PSScriptRoot
 $tmp=Join-Path ([IO.Path]::GetTempPath()) ('PCAD-F6-PACK-'+[guid]::NewGuid().ToString('N'))
 $dir1=Join-Path $tmp 'build1';$dir2=Join-Path $tmp 'build2';$unpacked=Join-Path $tmp 'unpacked'
-$zipName='ParcheCAD_4.0_DEV_NO_RELEASE.zip'
+$zipName='ParcheCAD_4.1_DEV_NO_RELEASE.zip'
 try {
     $null=New-Item -ItemType Directory -Path $tmp -Force
     & (Join-Path $repo 'tools\Build-ParcheCAD.ps1') -OutputDirectory $dir1
@@ -103,6 +103,24 @@ try {
        $mon.WebViewIsolationVerified -ne $false -or $mon.Result -cne 'MONITOREO_COMPLETADO_OBSERVACIONAL'){
         throw 'Extracted monitor failed to preserve observational limits.'
     }
+
+    # V4.1: los PS1 procedentes de ZIP externo pueden tener Mark-of-the-Web.
+    # Probar sobre copia extraida, sin quitar marcas ni modificar politicas.
+    $cmd=Get-Content -LiteralPath (Join-Path $unpacked 'Abrir_ParcheCAD.cmd') -Raw
+    $uiSrc=Get-Content -LiteralPath (Join-Path $unpacked 'src\ParcheCAD.Panel.ps1') -Raw
+    if($cmd -notmatch 'ExecutionPolicy Bypass' -or $uiSrc -match 'ExecutionPolicy RemoteSigned' -or
+       @([regex]::Matches($uiSrc,'ExecutionPolicy Bypass')).Count -ne 3){
+        throw 'V41: launcher y tres procesos hijos no usan politica temporal.'
+    }
+    $psScripts=@(Get-ChildItem -LiteralPath (Join-Path $unpacked 'src') -Filter '*.ps1' -File)
+    foreach($ps in $psScripts){
+        Set-Content -LiteralPath $ps.FullName -Stream Zone.Identifier -Value @('[ZoneTransfer]','ZoneId=3') -ErrorAction Stop
+    }
+    Push-Location $unpacked
+    try{
+        & $env:ComSpec /d /c 'Abrir_ParcheCAD.cmd --selftest'
+        if($LASTEXITCODE -ne 0){throw 'V41: el paquete descargado marcado falla GUI SelfTest.'}
+    }finally{Pop-Location}
     Write-Host ('PASS F6 package: deterministic SHA256, {0} files, extracted CLI, WinForms and F17 evidence' -f $verified) -ForegroundColor Green
 } finally {
     if(Test-Path -LiteralPath $tmp -PathType Container){Remove-Item -LiteralPath $tmp -Recurse -Force}
