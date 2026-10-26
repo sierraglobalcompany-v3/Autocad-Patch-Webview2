@@ -110,8 +110,8 @@ try {
     $cmd=Get-Content -LiteralPath (Join-Path $unpacked 'Abrir_ParcheCAD.cmd') -Raw
     $uiSrc=Get-Content -LiteralPath (Join-Path $unpacked 'src\ParcheCAD.Panel.ps1') -Raw
     if($cmd -notmatch 'ExecutionPolicy Bypass' -or $uiSrc -match 'ExecutionPolicy RemoteSigned' -or
-       @([regex]::Matches($uiSrc,'ExecutionPolicy Bypass')).Count -ne 3){
-        throw 'V41: launcher y tres procesos hijos no usan politica temporal.'
+       @([regex]::Matches($uiSrc,'ExecutionPolicy Bypass')).Count -ne 4){
+        throw 'V42: launcher y cuatro procesos hijos no usan politica temporal.'
     }
     $psScripts=@(Get-ChildItem -LiteralPath (Join-Path $unpacked 'src') -Filter '*.ps1' -File)
     foreach($ps in $psScripts){
