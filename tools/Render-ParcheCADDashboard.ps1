@@ -1,4 +1,4 @@
-# Render WPF dashboard to a PNG offscreen (CI evidence only; no firewall or GUI interaction).
+﻿# Render WPF dashboard to a PNG offscreen (CI evidence only; no firewall or GUI interaction).
 #Requires -Version 5.1
 [CmdletBinding()]
 param([string]$OutputFile='')

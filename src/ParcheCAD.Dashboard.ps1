@@ -1,4 +1,4 @@
-# ParcheCAD 4.3 - WPF frontend only. CLI firewall/audit/monitor engines unchanged.
+﻿# ParcheCAD 4.3 - WPF frontend only. CLI firewall/audit/monitor engines unchanged.
 #Requires -Version 5.1
 [CmdletBinding()]
 param([switch]$SelfTest)
