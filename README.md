@@ -86,3 +86,15 @@ Interfaz 4.2: tarjetas y botones con jerarquia, paneles blancos, y pestañas sep
 ### ParcheCAD 4.2 — Vista previa de reglas sin bloquear el panel
 
 `VER REGLAS AUTOCAD` usa `src/ParcheCAD.Preview.ps1` en un proceso PowerShell hijo de **solo lectura**. El inventario por carpetas y las consultas `Get-NetFirewallRule` ya no se ejecutan en el hilo WinForms. El panel muestra barra animada (Marquee), etapa 1/3–3/3 y segundos transcurridos; permite cancelar exclusivamente su proceso hijo sin afectar AutoCAD ni el firewall. El archivo `informes/preview_*/preview.json` confirma estado, candidatos y conflictos sin rutas privadas ni reglas creadas. Aplicar conserva las comprobaciones del motor, UAC, confirmación y recuperación. No inferir porcentaje de una fase. QA F9 y F6; RC1 pendiente en Windows del usuario.
+
+## ParcheCAD 4.3 — Dashboard WPF (DEV, NO RELEASE)
+
+Interfaz principal migrada a WPF/XAML sin modificar los motores de reglas, vista previa, auditoría o monitor.
+El diseño incluye tarjetas de métricas, sombra sutil, botones azules y verdes, progreso y estados visibles, y resultados en tres pestañas.
+
+**Uso:** Abrir_ParcheCAD.cmd inicia la interfaz WPF mediante Windows PowerShell 5.1 en STA. Abrir_ParcheCAD_Clasico.cmd conserva WinForms como respaldo temporal.
+Las consultas de vista previa y WebView2 usan sus workers anteriores y no congelan el hilo gráfico; cancelar termina solo el proceso hijo de lectura.
+Aplicar/Revertir siguen usando el motor elevado existente (UAC, validaciones y confirmación escrita). WebView2 compartido sigue excluido.
+No se instala software adicional; Bypass se limita al proceso PowerShell y no evita GPO obligatoria.
+QA de escritorio y operación con AutoCAD real pendientes; CI headless no equivale a certificación visual ni release.
+Ver docs/V43_DASHBOARD_WPF.md.

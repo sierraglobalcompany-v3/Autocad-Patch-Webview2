@@ -5,7 +5,7 @@ $ErrorActionPreference='Stop'
 $repo=Split-Path -Parent $PSScriptRoot
 $tmp=Join-Path ([IO.Path]::GetTempPath()) ('PCAD-F6-PACK-'+[guid]::NewGuid().ToString('N'))
 $dir1=Join-Path $tmp 'build1';$dir2=Join-Path $tmp 'build2';$unpacked=Join-Path $tmp 'unpacked'
-$zipName='ParcheCAD_4.2_DEV_NO_RELEASE.zip'
+$zipName='ParcheCAD_4.3_DEV_NO_RELEASE.zip'
 try {
     $null=New-Item -ItemType Directory -Path $tmp -Force
     & (Join-Path $repo 'tools\Build-ParcheCAD.ps1') -OutputDirectory $dir1
@@ -106,9 +106,16 @@ try {
         throw 'Extracted monitor failed to preserve observational limits.'
     }
 
+    # V4.3: assets WPF, launcher principal y interfaz clasica de respaldo.
+    foreach($item in @('src\ParcheCAD.Dashboard.ps1','src\ParcheCAD.Dashboard.xaml','Abrir_ParcheCAD_Clasico.cmd','docs\V43_DASHBOARD_WPF.md')){
+        if(!(Test-Path -LiteralPath (Join-Path $unpacked $item) -PathType Leaf)){throw ('V43 missing asset: '+$item)}
+    }
+    & $exe -NoLogo -NoProfile -STA -ExecutionPolicy Bypass -File (Join-Path $unpacked 'src\ParcheCAD.Dashboard.ps1') -SelfTest
+    if($LASTEXITCODE -ne 0){throw 'V43 WPF extracted SelfTest failed.'}
     # V4.1: los PS1 procedentes de ZIP externo pueden tener Mark-of-the-Web.
     # Probar sobre copia extraida, sin quitar marcas ni modificar politicas.
     $cmd=Get-Content -LiteralPath (Join-Path $unpacked 'Abrir_ParcheCAD.cmd') -Raw
+    if($cmd -notmatch 'ParcheCAD\.Dashboard\.ps1'){throw 'V43 launcher did not select WPF.'}
     $uiSrc=Get-Content -LiteralPath (Join-Path $unpacked 'src\ParcheCAD.Panel.ps1') -Raw
     if($cmd -notmatch 'ExecutionPolicy Bypass' -or $uiSrc -match 'ExecutionPolicy RemoteSigned' -or
        @([regex]::Matches($uiSrc,'ExecutionPolicy Bypass')).Count -ne 5){
