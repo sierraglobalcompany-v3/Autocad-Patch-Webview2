@@ -31,7 +31,7 @@ try {
     }
     Write-Host 'Descubriendo instalaciones reales y ejecutables sin modificar Windows...'
     $inst=@(Get-PCADInstallations -InternalPaths|Where-Object {$_.Year -in $Years -and $_.FileFound})
-    $cat=Get-PCADExecutableCatalog -Installations $inst -InternalPaths
+    $cat=Get-PCADExecutableCatalog -Installations $inst -SharedRoots @() -InternalPaths
     if($cat.Status -ne 'OK'){
         Write-Warning 'Catalogo incompleto; se conserva detalle de advertencias.'
         @($cat.Warnings)|ForEach-Object {Write-Warning $_}

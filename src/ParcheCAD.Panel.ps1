@@ -168,6 +168,7 @@ function PCAD-Busy([bool]$Busy) {
     $script:apply.BackColor=$(if($script:apply.Enabled){[Drawing.Color]::FromArgb(21,138,66)}else{[Drawing.Color]::FromArgb(226,232,240)})
     $script:apply.ForeColor=$(if($script:apply.Enabled){[Drawing.Color]::White}else{[Drawing.Color]::FromArgb(99,110,126)})
     $script:applyHint.Text=$(if($Busy){'Accion no disponible mientras se consulta'}else{'Verifica rutas, conflictos y respaldo antes de bloquear'})
+    $script:preview.BackColor=[Drawing.Color]::FromArgb(235,244,255)
 }
 function PCAD-StopOwnedDiagnostic {
     [CmdletBinding()]
@@ -461,7 +462,10 @@ $timer.Add_Tick({
             $operationInfo.Text=('Ultima operacion: codigo '+$code)
             if($code -ne 0){[void][Windows.Forms.MessageBox]::Show('Operacion no completada. Comprueba la consola elevada y el informe; no se asume bloqueo.','ParcheCAD 4.1','OK','Warning')}
             $status.Text=('Operacion administrativa finalizada (codigo '+$code+'). Reconsultando...')
-            PCAD-Begin
+            # No reejecutar el analizador general tras un Apply/rollback;
+            # el motor elevado ya comprueba cada regla y registra su journal.
+            $timer.Stop()
+            $progressLabel.Text='Operacion completada. Revisa el resultado y respaldo local.'
         } else {$progressLabel.Text='Operacion administrativa en consola elevada: esperando confirmacion/resultado...'}
         return
     }
@@ -665,7 +669,7 @@ if($InteractionSelfTest){
         $null=$onClick.Invoke($Button,[object[]]@([EventArgs]::Empty))
     }
     try {
-        if($apply.Enabled -or !$start.Enabled){throw 'F9: initial action state unsafe'}
+        if($apply.Enabled -or !$start.Enabled){throw 'F9: initial controls should be safe before first PCAD-Busy'}
         Write-Host 'F9: dispatch Analyze handler without displaying a desktop window.'
         Invoke-PCADClick -Button $start
         if($null -eq $script:Proc -or !$cancel.Enabled -or $apply.Enabled){throw 'F9: Analyze did not start read-only child'}
@@ -688,7 +692,7 @@ if($InteractionSelfTest){
             throw 'F9: diagnostic process finished without a readable report or completion marker'
         }
         $ui=Get-PCADReportUiState -Report $script:LastReport -ExitCode $script:LastExitCode
-        if(!$start.Enabled -or $cancel.Enabled -or $apply.Enabled){throw 'F9: wrong controls after read-only diagnostic on clean runner'}
+        if(!$start.Enabled -or $cancel.Enabled -or !$apply.Enabled){throw 'V42: firewall no debe depender del diagnostico de la auditoria'}
         if($status.Text -cne $ui.Description){throw 'F9: GUI header disagrees with validator'}
         $scope=@(Get-PCADReportRows -Object $ui.Sections -Name 'CatalogScope')
         if($scope.Count -ne 1 -or $scope[0].SharedAutomaticBlocking -ne $false -or
@@ -711,7 +715,7 @@ if($InteractionSelfTest){
         PCAD-Busy $true
         if(!$cancel.Enabled -or $apply.Enabled){throw 'F9: cancel disabled while read-only child running'}
         Invoke-PCADClick -Button $cancel
-        if($null -ne $script:Proc -or $cancel.Enabled -or $apply.Enabled -or $status.Text -notmatch 'CANCELADO'){
+        if($null -ne $script:Proc -or $cancel.Enabled -or !$apply.Enabled -or $status.Text -notmatch 'CANCELADO'){
             throw 'F9: cancel handler failed to release owned process and reset controls'
         }
         if(Get-Process -Id $ownedPid -ErrorAction SilentlyContinue){throw 'F10: Cancel claimed success but owned PID is still active'}

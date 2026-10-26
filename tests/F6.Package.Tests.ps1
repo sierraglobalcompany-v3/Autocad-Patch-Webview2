@@ -5,7 +5,7 @@ $ErrorActionPreference='Stop'
 $repo=Split-Path -Parent $PSScriptRoot
 $tmp=Join-Path ([IO.Path]::GetTempPath()) ('PCAD-F6-PACK-'+[guid]::NewGuid().ToString('N'))
 $dir1=Join-Path $tmp 'build1';$dir2=Join-Path $tmp 'build2';$unpacked=Join-Path $tmp 'unpacked'
-$zipName='ParcheCAD_4.1_DEV_NO_RELEASE.zip'
+$zipName='ParcheCAD_4.2_DEV_NO_RELEASE.zip'
 try {
     $null=New-Item -ItemType Directory -Path $tmp -Force
     & (Join-Path $repo 'tools\Build-ParcheCAD.ps1') -OutputDirectory $dir1
@@ -54,6 +54,7 @@ try {
                            'src\ParcheCAD.RCGates.ps1',
                            'src\ParcheCAD.Diagnostico.ps1',
                            'src\ParcheCAD.Monitor.ps1',
+        'src\ParcheCAD.WebViewAudit.ps1',
                            'docs\F17_PROTOCOLO_QA_INTEGRADA.md')){
         $p=Join-Path $unpacked $required
         if(!(Test-Path -LiteralPath $p -PathType Leaf)){throw ('F17 missing from extracted ZIP: '+$required)}
@@ -121,6 +122,16 @@ try {
         & $env:ComSpec /d /c 'Abrir_ParcheCAD.cmd --selftest'
         if($LASTEXITCODE -ne 0){throw 'V41: el paquete descargado marcado falla GUI SelfTest.'}
     }finally{Pop-Location}
+    # V42: auditar WebView2 desde el paquete extraido, sin instalar AutoCAD ni reglas.
+    $auditDir=Join-Path $tmp 'WEBVIEW-PACKAGED'
+    $null=New-Item -ItemType Directory -Path $auditDir -ErrorAction Stop
+    & $exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File (Join-Path $unpacked 'src\ParcheCAD.WebViewAudit.ps1') -OutputDirectory $auditDir
+    if($LASTEXITCODE -ne 0){throw 'V42: auditoria WebView2 empaquetada fallo'}
+    $audit=Get-Content -LiteralPath (Join-Path $auditDir 'webview-audit.json') -Raw | ConvertFrom-Json
+    if($audit.Schema -cne 'PCAD_WEBVIEW_AUDIT_1' -or $audit.NoFirewallChanges -ne $true -or
+       $audit.SafeBlockingCandidates -ne 0 -or @($audit.Entries | Where-Object {$_.AutomaticFirewallEligible -ne $false}).Count -gt 0){
+        throw 'V42: auditoria invento un candidato bloqueable o afirmo modificar firewall'
+    }
     Write-Host ('PASS F6 package: deterministic SHA256, {0} files, extracted CLI, WinForms and F17 evidence' -f $verified) -ForegroundColor Green
 } finally {
     if(Test-Path -LiteralPath $tmp -PathType Container){Remove-Item -LiteralPath $tmp -Recurse -Force}
