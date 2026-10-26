@@ -65,7 +65,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: ParcheCAD_4.3_WPF_VISUAL_QA
-          path: wpf-dashboard-preview.png
+          path: wpf-dashboard-preview-*.png
           if-no-files-found: error
           retention-days: 14
       - name: WinForms construction and control safety smoke (no UI interaction)

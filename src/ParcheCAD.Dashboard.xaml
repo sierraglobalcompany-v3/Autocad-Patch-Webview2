@@ -1,15 +1,17 @@
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Name="MainWindow" Title="ParcheCAD 4.3 | Firewall AutoCAD y WebView2"
-        Width="1170" Height="875" MinWidth="1040" MinHeight="750"
+        Width="1120" Height="810" MinWidth="580" MinHeight="460"
         WindowStartupLocation="CenterScreen" Background="#F5F7FB"
         FontFamily="Segoe UI" FontSize="13" UseLayoutRounding="True"
         SnapsToDevicePixels="True">
  <Window.Resources>
   <SolidColorBrush x:Key="Ink" Color="#10264B"/>
-  <SolidColorBrush x:Key="Muted" Color="#64748B"/>
+  <SolidColorBrush x:Key="Muted" Color="#52657E"/>
   <SolidColorBrush x:Key="Accent" Color="#1769D2"/>
   <SolidColorBrush x:Key="Line" Color="#E5EAF3"/>
+  <SolidColorBrush x:Key="Success" Color="#0C7140"/>
+  <SolidColorBrush x:Key="Subtle" Color="#52657E"/>
   <Style x:Key="Card" TargetType="Border">
    <Setter Property="Background" Value="White"/>
    <Setter Property="CornerRadius" Value="17"/>
@@ -24,7 +26,8 @@
    <Setter Property="FontSize" Value="13"/>
    <Setter Property="FontWeight" Value="SemiBold"/>
    <Setter Property="MinHeight" Value="46"/>
-   <Setter Property="Padding" Value="16,8"/>
+   <Setter Property="Padding" Value="10,10"/>
+   <Setter Property="HorizontalContentAlignment" Value="Center"/>
    <Setter Property="Template"><Setter.Value>
     <ControlTemplate TargetType="Button">
      <Border x:Name="Chrome" Background="{TemplateBinding Background}" CornerRadius="10" BorderBrush="#DCE6F4" BorderThickness="{TemplateBinding BorderThickness}">
@@ -33,7 +36,8 @@
      <ControlTemplate.Triggers>
       <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Chrome" Property="Opacity" Value="0.85"/></Trigger>
       <Trigger Property="IsPressed" Value="True"><Setter TargetName="Chrome" Property="Opacity" Value="0.7"/></Trigger>
-      <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Chrome" Property="Background" Value="#E9EDF4"/><Setter Property="Foreground" Value="#8794A8"/><Setter Property="Cursor" Value="Arrow"/></Trigger>
+      <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Chrome" Property="Background" Value="#E9EDF4"/><Setter Property="Foreground" Value="#53657E"/><Setter Property="Cursor" Value="Arrow"/></Trigger>
+      <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Chrome" Property="BorderThickness" Value="3"/><Setter TargetName="Chrome" Property="BorderBrush" Value="#082E70"/></Trigger>
      </ControlTemplate.Triggers>
     </ControlTemplate>
    </Setter.Value></Setter>
@@ -43,17 +47,17 @@
    <Setter Property="Foreground" Value="#234B80"/>
   </Style>
   <Style x:Key="Title" TargetType="TextBlock">
-   <Setter Property="Foreground" Value="{StaticResource Ink}"/><Setter Property="FontSize" Value="17"/><Setter Property="FontWeight" Value="Bold"/>
+   <Setter Property="Foreground" Value="{StaticResource Ink}"/><Setter Property="FontSize" Value="17"/><Setter Property="FontWeight" Value="Bold"/><Setter Property="TextWrapping" Value="Wrap"/>
   </Style>
   <Style x:Key="Meta" TargetType="TextBlock">
-   <Setter Property="Foreground" Value="{StaticResource Muted}"/><Setter Property="FontSize" Value="12"/>
+   <Setter Property="Foreground" Value="{StaticResource Muted}"/><Setter Property="FontSize" Value="12"/><Setter Property="TextWrapping" Value="Wrap"/>
   </Style>
   <Style x:Key="Metric" TargetType="TextBlock">
-   <Setter Property="Foreground" Value="{StaticResource Ink}"/><Setter Property="FontSize" Value="28"/><Setter Property="FontWeight" Value="Bold"/>
+   <Setter Property="Foreground" Value="{StaticResource Ink}"/><Setter Property="FontSize" Value="28"/><Setter Property="FontWeight" Value="Bold"/><Setter Property="TextWrapping" Value="Wrap"/>
   </Style>
  </Window.Resources>
- <ScrollViewer Background="#F5F7FB" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-  <Grid Margin="28,22,28,18">
+ <ScrollViewer x:Name="MainScroll" Background="#F5F7FB" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" CanContentScroll="True">
+  <Grid Margin="20,20,20,18">
    <Grid.RowDefinitions>
     <RowDefinition Height="Auto"/><RowDefinition Height="20"/>
     <RowDefinition Height="Auto"/><RowDefinition Height="15"/>
@@ -63,39 +67,36 @@
     <RowDefinition Height="Auto"/><RowDefinition Height="15"/>
     <RowDefinition Height="Auto"/>
    </Grid.RowDefinitions>
-   <Grid Grid.Row="0">
-    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-    <StackPanel>
-     <TextBlock Text="ParcheCAD 4.3" FontSize="30" FontWeight="Bold" Foreground="{StaticResource Ink}"/>
-     <TextBlock Text="Firewall AutoCAD y auditoría de WebView2" Margin="0,3,0,0" FontSize="14" Foreground="{StaticResource Muted}"/>
-    </StackPanel>
-    <Border Grid.Column="1" Background="#E4F4ED" CornerRadius="18" Padding="16,8" VerticalAlignment="Center">
-     <StackPanel Orientation="Horizontal"><Ellipse x:Name="StatusDot" Width="9" Height="9" Fill="#15945B" VerticalAlignment="Center" Margin="0,0,8,0"/><TextBlock x:Name="TopStatus" Text="LISTO · SIN CAMBIOS" FontSize="12" FontWeight="Bold" Foreground="#176443"/></StackPanel>
+   <StackPanel Grid.Row="0">
+    <TextBlock Text="ParcheCAD 4.3" FontSize="29" FontWeight="Bold" Foreground="{StaticResource Ink}" TextWrapping="Wrap"/>
+    <TextBlock Text="Firewall AutoCAD y auditoría de WebView2" Margin="0,3,0,0" FontSize="14" Foreground="{StaticResource Muted}" TextWrapping="Wrap"/>
+    <Border Background="#E4F4ED" CornerRadius="16" Padding="13,7" HorizontalAlignment="Left" Margin="0,12,0,0">
+     <StackPanel Orientation="Horizontal"><Ellipse x:Name="StatusDot" Width="9" Height="9" Fill="#15945B" VerticalAlignment="Center" Margin="0,0,8,0"/><TextBlock x:Name="TopStatus" Text="LISTO · SIN CAMBIOS" TextWrapping="Wrap" FontSize="12" FontWeight="Bold" Foreground="#176443"/></StackPanel>
     </Border>
-   </Grid>
-   <UniformGrid Grid.Row="2" Columns="4">
-    <Border Style="{StaticResource Card}" Margin="0,0,10,0">
+   </StackPanel>
+   <UniformGrid x:Name="MetricsGrid" Grid.Row="2" Columns="4">
+    <Border Style="{StaticResource Card}" Margin="3,4,7,4">
      <StackPanel>
       <TextBlock Text="AutoCAD detectado" Style="{StaticResource Meta}"/>
       <TextBlock x:Name="MetricAutoCAD" Text="—" Style="{StaticResource Metric}" Margin="0,7,0,4"/>
       <TextBlock Text="Instalaciones locales" Style="{StaticResource Meta}"/>
      </StackPanel>
     </Border>
-    <Border Style="{StaticResource Card}" Margin="3,0,10,0">
+    <Border Style="{StaticResource Card}" Margin="3,4,7,4">
      <StackPanel>
       <TextBlock Text="Reglas candidatas" Style="{StaticResource Meta}"/>
       <TextBlock x:Name="MetricRules" Text="—" Style="{StaticResource Metric}" Margin="0,7,0,4"/>
       <TextBlock x:Name="MetricConflicts" Text="Sin consultar" Style="{StaticResource Meta}"/>
      </StackPanel>
     </Border>
-    <Border Style="{StaticResource Card}" Margin="3,0,10,0">
+    <Border Style="{StaticResource Card}" Margin="3,4,7,4">
      <StackPanel>
       <TextBlock Text="WebView2 observados" Style="{StaticResource Meta}"/>
       <TextBlock x:Name="MetricWeb" Text="—" Style="{StaticResource Metric}" Margin="0,7,0,4"/>
       <TextBlock Text="Instantánea de procesos" Style="{StaticResource Meta}"/>
      </StackPanel>
     </Border>
-    <Border Style="{StaticResource Card}" Margin="3,0,0,0">
+    <Border Style="{StaticResource Card}" Margin="3,4,7,4">
      <StackPanel>
       <TextBlock Text="AutoCAD probable" Style="{StaticResource Meta}"/>
       <TextBlock x:Name="MetricProbable" Text="—" Style="{StaticResource Metric}" Margin="0,7,0,4"/>
@@ -104,61 +105,63 @@
     </Border>
    </UniformGrid>
    <Border Grid.Row="4" Background="#FFF1D7" CornerRadius="12" Padding="15,12" BorderBrush="#F6DEA7" BorderThickness="1">
-    <StackPanel Orientation="Horizontal">
-     <TextBlock Text="!" FontSize="17" FontWeight="ExtraBold" Foreground="#915A13" Width="26"/>
-     <TextBlock Text="WebView2 es compartido con otras aplicaciones. Nunca bloquear el ejecutable global por PID o parentesco." Foreground="#80501A" TextWrapping="Wrap" VerticalAlignment="Center" FontSize="12"/>
-    </StackPanel>
+    <Grid>
+     <Grid.ColumnDefinitions><ColumnDefinition Width="24"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+     <TextBlock Text="!" FontSize="17" FontWeight="ExtraBold" Foreground="#80501A"/>
+     <TextBlock Grid.Column="1" Text="WebView2 se comparte con otras aplicaciones. No bloqueamos el ejecutable global." Foreground="#80501A" TextWrapping="Wrap" FontSize="13"/>
+    </Grid>
    </Border>
-   <Grid Grid.Row="6">
-    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="18"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-    <Border Grid.Column="0" Style="{StaticResource Card}">
+   <WrapPanel x:Name="ActionsWrap" Grid.Row="6">
+    <Border x:Name="FirewallCard" Style="{StaticResource Card}" Margin="0,0,14,12">
      <StackPanel>
-      <DockPanel LastChildFill="True" Margin="0,0,0,12">
-       <Border Width="44" Height="44" Background="#E9F2FF" CornerRadius="11" DockPanel.Dock="Left" Margin="0,0,12,0">
+      <Grid Margin="0,0,0,12">
+       <Grid.ColumnDefinitions><ColumnDefinition Width="44"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+       <Border Width="44" Height="44" Background="#E9F2FF" CornerRadius="11" Grid.Column="0" Margin="0,0,12,0">
         <TextBlock Text="01" FontWeight="Bold" FontSize="16" Foreground="#1769D2" HorizontalAlignment="Center" VerticalAlignment="Center"/>
        </Border>
-       <StackPanel VerticalAlignment="Center">
+       <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0">
         <TextBlock Text="Firewall AutoCAD" Style="{StaticResource Title}"/>
         <TextBlock Text="Lista de ejecutables · reglas y recuperación" Style="{StaticResource Meta}" TextWrapping="Wrap"/>
        </StackPanel>
-      </DockPanel>
+      </Grid>
       <TextBlock Text="Verifica las rutas y posibles conflictos antes de aplicar. El analizador WebView2 no es requisito." TextWrapping="Wrap" Foreground="#53657D" FontSize="12" Margin="0,0,0,15"/>
       <Grid>
        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="10"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-       <Button x:Name="BtnPreview" Grid.Column="0" Style="{StaticResource Action}" Content="VER REGLAS AUTOCAD"/>
-       <Button x:Name="BtnApply" Grid.Column="2" Style="{StaticResource Action}" Background="#169256" Content="VERIFICAR Y APLICAR"/>
+       <Button x:Name="BtnPreview" Grid.Column="0" Style="{StaticResource Action}" AutomationProperties.Name="VER REGLAS AUTOCAD"><TextBlock Text="VER REGLAS AUTOCAD" TextAlignment="Center" TextWrapping="Wrap"/></Button>
+       <Button x:Name="BtnApply" Grid.Column="2" Style="{StaticResource Action}" Background="#0B7142" AutomationProperties.Name="VERIFICAR Y APLICAR"><TextBlock Text="VERIFICAR Y APLICAR" TextAlignment="Center" TextWrapping="Wrap"/></Button>
       </Grid>
-      <Button x:Name="BtnRollback" Margin="0,11,0,0" Style="{StaticResource Secondary}" Content="Revertir reglas propias"/>
+      <Button x:Name="BtnRollback" Margin="0,11,0,0" Style="{StaticResource Secondary}" AutomationProperties.Name="Revertir reglas propias"><TextBlock Text="Revertir reglas propias" TextAlignment="Center" TextWrapping="Wrap"/></Button>
       <TextBlock x:Name="FirewallHint" Style="{StaticResource Meta}" Text="Aplicar requiere administrador y confirmación escrita." Margin="0,12,0,0" TextWrapping="Wrap"/>
      </StackPanel>
     </Border>
-    <Border Grid.Column="2" Style="{StaticResource Card}">
+    <Border x:Name="WebCard" Style="{StaticResource Card}" Margin="0,0,0,12">
      <StackPanel>
-      <DockPanel LastChildFill="True" Margin="0,0,0,12">
-       <Border Width="44" Height="44" Background="#E7ECFC" CornerRadius="11" DockPanel.Dock="Left" Margin="0,0,12,0">
+      <Grid Margin="0,0,0,12">
+       <Grid.ColumnDefinitions><ColumnDefinition Width="44"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+       <Border Width="44" Height="44" Background="#E7ECFC" CornerRadius="11" Grid.Column="0" Margin="0,0,12,0">
         <TextBlock Text="02" FontWeight="Bold" FontSize="16" Foreground="#354F9E" HorizontalAlignment="Center" VerticalAlignment="Center"/>
        </Border>
-       <StackPanel VerticalAlignment="Center">
+       <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0">
         <TextBlock Text="Analizador WebView2" Style="{StaticResource Title}"/>
         <TextBlock Text="Procesos · conexiones · atribución probable" Style="{StaticResource Meta}" TextWrapping="Wrap"/>
        </StackPanel>
-      </DockPanel>
+      </Grid>
       <TextBlock Text="Analiza los WebView2 asociados probablemente a AutoCAD sin afectar WhatsApp, correo ni el runtime." TextWrapping="Wrap" Foreground="#53657D" FontSize="12" Margin="0,0,0,15"/>
       <Grid>
        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="10"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-       <Button x:Name="BtnAudit" Grid.Column="0" Style="{StaticResource Action}" Content="AUDITAR WEBVIEW2"/>
-       <Button x:Name="BtnMonitor" Grid.Column="2" Style="{StaticResource Action}" Background="#354F9E" Content="INICIAR MONITOR"/>
+       <Button x:Name="BtnAudit" Grid.Column="0" Style="{StaticResource Action}" AutomationProperties.Name="AUDITAR WEBVIEW2"><TextBlock Text="AUDITAR WEBVIEW2" TextAlignment="Center" TextWrapping="Wrap"/></Button>
+       <Button x:Name="BtnMonitor" Grid.Column="2" Style="{StaticResource Action}" Background="#354F9E" AutomationProperties.Name="INICIAR MONITOR"><TextBlock Text="INICIAR MONITOR" TextAlignment="Center" TextWrapping="Wrap"/></Button>
       </Grid>
-      <Button x:Name="BtnStopMonitor" Margin="0,11,0,0" Style="{StaticResource Secondary}" Content="Detener monitor y guardar registro" IsEnabled="False"/>
+      <Button x:Name="BtnStopMonitor" Margin="0,11,0,0" Style="{StaticResource Secondary}" IsEnabled="False" AutomationProperties.Name="Detener monitor y guardar registro"><TextBlock Text="Detener monitor y guardar registro" TextAlignment="Center" TextWrapping="Wrap"/></Button>
       <TextBlock x:Name="MonitorHint" Style="{StaticResource Meta}" Text="Solo lectura · máximo 10 minutos · sin bloqueo global" Margin="0,12,0,0" TextWrapping="Wrap"/>
      </StackPanel>
     </Border>
-   </Grid>
+   </WrapPanel>
    <Border Grid.Row="8" Style="{StaticResource Card}">
     <Grid>
      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="12"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
      <Grid Grid.Row="0">
-      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="65"/></Grid.ColumnDefinitions>
       <StackPanel>
        <TextBlock Text="Actividad en tiempo real" Style="{StaticResource Title}"/>
        <TextBlock x:Name="ActivityText" Text="Listo para trabajar. Ninguna operación en curso." Margin="0,5,0,0" Foreground="#64748B" FontSize="12" TextWrapping="Wrap"/>
@@ -172,8 +175,8 @@
     <StackPanel>
      <Grid Margin="0,0,0,11">
       <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-      <TextBlock Text="Resultados y registros" Style="{StaticResource Title}"/>
-      <TextBlock x:Name="ResultTag" Grid.Column="1" Text="SIN CAMBIOS" Foreground="#198458" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
+      <TextBlock Text="Resultados y registros" Style="{StaticResource Title}" TextWrapping="Wrap"/>
+      <TextBlock x:Name="ResultTag" Grid.Column="1" Text="SIN CAMBIOS" Foreground="#0B7142" TextWrapping="Wrap" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
      </Grid>
      <TabControl x:Name="ResultTabs" Height="132" BorderThickness="0" Background="White">
       <TabItem Header="AutoCAD · reglas">
@@ -188,15 +191,14 @@
      </TabControl>
     </StackPanel>
    </Border>
-   <Grid Grid.Row="12">
-    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-    <TextBlock Text="ParcheCAD · herramientas locales · no afiliado a Autodesk ni Microsoft" Foreground="#8592A5" FontSize="11" VerticalAlignment="Center"/>
-    <StackPanel Grid.Column="1" Orientation="Horizontal">
-     <Button x:Name="BtnReports" Style="{StaticResource Secondary}" Content="Abrir informes" Width="134" Margin="0,0,8,0" MinHeight="37"/>
-     <Button x:Name="BtnCancel" Style="{StaticResource Secondary}" Content="Cancelar consulta" Width="142" Margin="0,0,8,0" MinHeight="37" IsEnabled="False"/>
-     <Button x:Name="BtnExit" Style="{StaticResource Secondary}" Content="Salir" Width="82" MinHeight="37"/>
-    </StackPanel>
-   </Grid>
+   <StackPanel Grid.Row="12">
+    <TextBlock Text="ParcheCAD · herramienta local independiente de Autodesk y Microsoft" Foreground="#50627A" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,10"/>
+    <WrapPanel HorizontalAlignment="Right">
+     <Button x:Name="BtnReports" Style="{StaticResource Secondary}" Margin="0,0,8,8" MinWidth="124" MinHeight="40" AutomationProperties.Name="Abrir informes"><TextBlock Text="Abrir informes" TextWrapping="Wrap" TextAlignment="Center"/></Button>
+     <Button x:Name="BtnCancel" Style="{StaticResource Secondary}" Margin="0,0,8,8" MinWidth="132" MinHeight="40" IsEnabled="False" AutomationProperties.Name="Cancelar consulta"><TextBlock Text="Cancelar consulta" TextWrapping="Wrap" TextAlignment="Center"/></Button>
+     <Button x:Name="BtnExit" Style="{StaticResource Secondary}" Margin="0,0,0,8" MinWidth="80" MinHeight="40" AutomationProperties.Name="Salir"><TextBlock Text="Salir" TextWrapping="Wrap" TextAlignment="Center"/></Button>
+    </WrapPanel>
+   </StackPanel>
   </Grid>
  </ScrollViewer>
 </Window>
