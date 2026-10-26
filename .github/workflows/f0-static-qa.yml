@@ -1,4 +1,4 @@
-name: ParcheCAD 4.1 Windows QA (F0-F17 + UI)
+name: ParcheCAD 4.2 Windows QA (Firewall + WebView audit)
 on:
   pull_request:
   push:
@@ -126,9 +126,9 @@ jobs:
           & .\tools\Build-ParcheCAD.ps1
       - uses: actions/upload-artifact@v4
         with:
-          name: ParcheCAD_4.1_DEV_NOT_RELEASE
+          name: ParcheCAD_4.2_DEV_NOT_RELEASE
           path: |
-            dist/ParcheCAD_4.1_DEV_NO_RELEASE.zip
-            dist/ParcheCAD_4.1_DEV_NO_RELEASE.zip.sha256
+            dist/ParcheCAD_4.2_DEV_NO_RELEASE.zip
+            dist/ParcheCAD_4.2_DEV_NO_RELEASE.zip.sha256
           if-no-files-found: error
           retention-days: 14

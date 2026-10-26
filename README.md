@@ -72,3 +72,17 @@ El panel incorpora **INICIAR MONITOR** y **DETENER MONITOR Y GUARDAR LOG**. Tras
 ## ParcheCAD 4.1 (DEV / NO RELEASE)
 
 Panel WinForms reordenado: acciones agrupadas; estado del diagnostico independiente del monitor; dos pestanas para informes; razon visible cuando Aplicar no cumple los gates. Mantiene las reglas de seguridad y excluye WebView2 compartido. El launcher y sus tres procesos hijos usan ExecutionPolicy Bypass temporal solamente en cada proceso; no ejecuta Set-ExecutionPolicy y las politicas empresariales GPO siguen prevaleciendo. Suite de paquete con ZIP extraido y marca de Internet Zone.Identifier. RC1 pendiente de prueba visual y AutoCAD real. Ver docs/V41_CAMBIOS_AUDITORIA.md.
+
+
+## ParcheCAD 4.2 — Separacion funcional (DEV, no RC1)
+
+**Firewall AutoCAD directo:** Ver reglas AutoCAD y Verificar y aplicar ya no requieren haber ejecutado el analizador de diez pasos. El motor de reglas revalida el catalogo conocido de ejecutables dentro de la instalacion AutoCAD, rutas, filtros, conflictos, UAC, confirmacion escrita y respaldo antes de modificar Windows. No escanea la red ni enumera servicios Autodesk compartidos durante esa operacion. Si faltan rutas o hay conflictos, aborta sin nuevas reglas. El diagnostico general anterior se conserva como herramienta tecnica compatible, pero no es requisito del firewall.
+
+**Auditoria WebView2 independiente:** boton Auditar WebView2 ejecuta una instantanea solo lectura, atribuye anfitrion como probable/indeterminado y lista por que el runtime compartido NO puede bloquearse selectivamente con una regla persistente por PID. Monitor continuo temporal separado. No se generan reglas WebView2.
+
+Interfaz 4.2: tarjetas y botones con jerarquia, paneles blancos, y pestañas separadas. Ver docs/V42_ARQUITECTURA_QA.md.
+
+
+### ParcheCAD 4.2 — Vista previa de reglas sin bloquear el panel
+
+`VER REGLAS AUTOCAD` usa `src/ParcheCAD.Preview.ps1` en un proceso PowerShell hijo de **solo lectura**. El inventario por carpetas y las consultas `Get-NetFirewallRule` ya no se ejecutan en el hilo WinForms. El panel muestra barra animada (Marquee), etapa 1/3–3/3 y segundos transcurridos; permite cancelar exclusivamente su proceso hijo sin afectar AutoCAD ni el firewall. El archivo `informes/preview_*/preview.json` confirma estado, candidatos y conflictos sin rutas privadas ni reglas creadas. Aplicar conserva las comprobaciones del motor, UAC, confirmación y recuperación. No inferir porcentaje de una fase. QA F9 y F6; RC1 pendiente en Windows del usuario.

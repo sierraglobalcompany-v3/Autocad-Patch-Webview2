@@ -14,6 +14,8 @@ $items=@(
     'src/ParcheCAD.Historico.ps1',
     'src/ParcheCAD.Network.ps1',
     'src/ParcheCAD.Monitor.ps1',
+    'src/ParcheCAD.WebViewAudit.ps1',
+    'src/ParcheCAD.Preview.ps1',
     'src/ParcheCAD.Cobertura.ps1',
     'src/ParcheCAD.RCGates.ps1',
     'src/ParcheCAD.Policy.ps1',
@@ -43,7 +45,8 @@ $items=@(
     'tools/Invoke-ParcheCADRC12.ps1',
     'tools/Invoke-ParcheCADF17.ps1',
     'docs/F17_PROTOCOLO_QA_INTEGRADA.md',
-    'docs/V41_CAMBIOS_AUDITORIA.md'
+    'docs/V41_CAMBIOS_AUDITORIA.md',
+    'docs/V42_ARQUITECTURA_QA.md'
 ) | Sort-Object
 foreach($name in $items){
     if($name -notmatch '^[a-zA-Z0-9_/.-]+$' -or $name -match '(?:^|/)\.\.(?:/|$)') {
@@ -55,7 +58,7 @@ foreach($name in $items){
 if(!(Test-Path -LiteralPath $OutputDirectory -PathType Container)){
     $null=New-Item -ItemType Directory -Path $OutputDirectory -Force -ErrorAction Stop
 }
-$zipName='ParcheCAD_4.1_DEV_NO_RELEASE.zip'
+$zipName='ParcheCAD_4.2_DEV_NO_RELEASE.zip'
 $zipFile=Join-Path $OutputDirectory $zipName
 Add-Type -AssemblyName System.IO.Compression -ErrorAction Stop
 $time=[DateTimeOffset]::Parse('2020-01-01T00:00:00+00:00')
