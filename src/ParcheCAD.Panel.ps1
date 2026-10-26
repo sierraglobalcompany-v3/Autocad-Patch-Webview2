@@ -759,6 +759,15 @@ if($InteractionSelfTest){
     $createdRunRoot=''
     $unrelated=$null
     $binding=[Reflection.BindingFlags]::Instance -bor [Reflection.BindingFlags]::NonPublic
+    # Windows may retain the process table entry briefly after WaitForExit;
+    # ensure the exact owned PID disappears, within a strict 2-second bound.
+    function Assert-PCADTestExited([int]$ProcessId,[string]$Failure) {
+        for($i=0;$i -lt 20;$i++){
+            if($null -eq (Get-Process -Id $ProcessId -ErrorAction SilentlyContinue)){return}
+            Start-Sleep -Milliseconds 100
+        }
+        throw $Failure
+    }
     function Invoke-PCADClick([Windows.Forms.Button]$Button){
         $onClick=$Button.GetType().GetMethod('OnClick',$binding)
         if($null -eq $onClick){throw 'F9: cannot resolve button OnClick handler'}
@@ -832,7 +841,7 @@ if($InteractionSelfTest){
         if($null -ne $script:Proc -or $cancel.Enabled -or !$apply.Enabled -or $status.Text -notmatch 'CANCELADO'){
             throw 'F9: cancel handler failed to release owned process and reset controls'
         }
-        if(Get-Process -Id $ownedPid -ErrorAction SilentlyContinue){throw 'F10: Cancel claimed success but owned PID is still active'}
+        Assert-PCADTestExited -ProcessId $ownedPid -Failure 'F10: Cancel claimed success but owned PID is still active'
         $unrelated.Refresh()
         if($unrelated.HasExited){throw 'F10: Cancel unexpectedly terminated unrelated PowerShell'}
         Write-Host 'F10 PASS: Cancel verified owned PID exit, unrelated PowerShell stays alive.'
@@ -862,7 +871,7 @@ if($InteractionSelfTest){
         $closingReadOnly=[Windows.Forms.FormClosingEventArgs]::new([Windows.Forms.CloseReason]::UserClosing,$false)
         $null=$onFormClosing.Invoke($form,[object[]]@($closingReadOnly))
         if($closingReadOnly.Cancel -or $null -ne $script:Proc){throw 'F10: closing failed to stop its owned read-only process'}
-        if(Get-Process -Id $closingPid -ErrorAction SilentlyContinue){throw 'F10: closing left read-only child running'}
+        Assert-PCADTestExited -ProcessId $closingPid -Failure 'F10: closing left read-only child running'
         $unrelated.Refresh()
         if($unrelated.HasExited){throw 'F10: closing terminated unrelated PowerShell'}
         Write-Host 'F10 PASS: FormClosing verified owned child stopped without touching unrelated process.'
