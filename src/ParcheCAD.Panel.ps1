@@ -36,6 +36,22 @@ function PCAD-Label([string]$Text,[int]$X,[int]$Y,[int]$W,[int]$H,[int]$Size=10)
     $o.Font=New-Object Drawing.Font('Segoe UI',$Size)
     return $o
 }
+function PCAD-Round([Windows.Forms.Control]$Control,[int]$Radius=11) {
+    if($Control.Width -le 2*$Radius -or $Control.Height -le 2*$Radius){return}
+    $w=$Control.Width-1;$h=$Control.Height-1;$d=2*$Radius
+    $path=New-Object Drawing.Drawing2D.GraphicsPath
+    try{
+        $path.AddArc(0,0,$d,$d,180,90)
+        $path.AddArc($w-$d,0,$d,$d,270,90)
+        $path.AddArc($w-$d,$h-$d,$d,$d,0,90)
+        $path.AddArc(0,$h-$d,$d,$d,90,90)
+        $path.CloseFigure()
+        $region=[Drawing.Region]::new($path)
+        $old=$Control.Region
+        $Control.Region=$region
+        if($null -ne $old){$old.Dispose()}
+    }finally{$path.Dispose()}
+}
 function PCAD-Button([string]$Text,[int]$X,[int]$Y,[int]$W,[int]$H=48) {
     $o=New-Object Windows.Forms.Button
     $o.Text=$Text;$o.Location=New-Object Drawing.Point($X,$Y)
@@ -47,18 +63,22 @@ function PCAD-Button([string]$Text,[int]$X,[int]$Y,[int]$W,[int]$H=48) {
     $o.ForeColor=[Drawing.Color]::FromArgb(23,47,87)
     $o.UseVisualStyleBackColor=$false
     $o.Font=New-Object Drawing.Font('Segoe UI',10,[Drawing.FontStyle]::Bold)
+    PCAD-Round -Control $o -Radius 8
+    $o.Add_Resize({param($sender,$e) PCAD-Round -Control $sender -Radius 8})
     return $o
 }
 function PCAD-Section([string]$Title,[int]$X,[int]$Y,[int]$W,[int]$H) {
     $o=New-Object Windows.Forms.Panel
-    $o.BorderStyle=[Windows.Forms.BorderStyle]::FixedSingle
+    $o.BorderStyle=[Windows.Forms.BorderStyle]::None
     $titleLabel=PCAD-Label $Title 12 8 ($W-26) 24 10
     $titleLabel.Font=New-Object Drawing.Font('Segoe UI',10,[Drawing.FontStyle]::Bold)
     $titleLabel.ForeColor=[Drawing.Color]::FromArgb(19,52,109)
     $o.Controls.Add($titleLabel)
     $o.Location=New-Object Drawing.Point($X,$Y)
     $o.Size=New-Object Drawing.Size($W,$H)
-    $o.BackColor=[Drawing.Color]::FromArgb(248,250,253)
+    $o.BackColor=[Drawing.Color]::White
+    PCAD-Round -Control $o -Radius 12
+    $o.Add_Resize({param($sender,$e) PCAD-Round -Control $sender -Radius 12})
     return $o
 }
 $form=New-Object Windows.Forms.Form
@@ -98,11 +118,15 @@ $start.BackColor=[Drawing.Color]::FromArgb(20,105,204)
 $start.ForeColor=[Drawing.Color]::White
 $start.Font=New-Object Drawing.Font('Segoe UI',11,[Drawing.FontStyle]::Bold)
 $open=PCAD-Button 'ABRIR INFORMES' 40 408 243 52
+$open.BackColor=[Drawing.Color]::FromArgb(238,245,255)
 $preview=PCAD-Button 'VER REGLAS AUTOCAD' 40 468 243 52
+$preview.BackColor=[Drawing.Color]::FromArgb(238,245,255)
 $apply=PCAD-Button 'VERIFICAR Y APLICAR' 322 348 243 53
 $apply.Font=New-Object Drawing.Font('Segoe UI',10,[Drawing.FontStyle]::Bold)
 $rollback=PCAD-Button 'REVERTIR OPERACION PROPIA' 322 408 243 52
 $monitorStart=PCAD-Button 'INICIAR MONITOR WEBVIEW2' 604 348 243 53
+$monitorStart.BackColor=[Drawing.Color]::FromArgb(35,67,125)
+$monitorStart.ForeColor=[Drawing.Color]::White
 $monitorStop=PCAD-Button 'DETENER MONITOR Y GUARDAR LOG' 604 408 243 52
 $cancel=PCAD-Button 'CANCELAR CONSULTA' 886 348 233 53
 $exit=PCAD-Button 'SALIR' 886 408 233 52
@@ -566,6 +590,9 @@ $preview.Add_Click({
         $inst=@(Get-PCADInstallations -InternalPaths | Where-Object {$_.FileFound})
         $cat=Get-PCADExecutableCatalog -Installations $inst -SharedRoots @() -InternalPaths
         $plan=New-PCADRulePlan -Catalog @($cat.Entries) -CheckExisting
+        $years=@($inst|ForEach-Object {$_.Year}|Sort-Object -Unique)
+        $installed.Text=('AutoCAD detectados: '+$(if($years.Count){$years -join ', '}else{'ninguno'}))
+        $rules.Text=('Reglas candidatas: '+$plan.Count+' | conflictos: '+$plan.Conflicts)
         $msg=('Instalaciones: {0}; candidatas: {1}; conflictos: {2}; excluidas: {3}' -f
             $inst.Count,$plan.Count,$plan.Conflicts,@($plan.Excluded).Count)+
             [Environment]::NewLine+'Vista previa de solo lectura; WebView2 compartido excluido.'
