@@ -1,7 +1,7 @@
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Name="MainWindow" Title="ParcheCAD 4.3 | Firewall AutoCAD y WebView2"
-        Width="1120" Height="810" MinWidth="580" MinHeight="460"
+        Width="1120" Height="810" MinWidth="430" MinHeight="300"
         WindowStartupLocation="CenterScreen" Background="#F5F7FB"
         FontFamily="Segoe UI" FontSize="13" UseLayoutRounding="True"
         SnapsToDevicePixels="True">

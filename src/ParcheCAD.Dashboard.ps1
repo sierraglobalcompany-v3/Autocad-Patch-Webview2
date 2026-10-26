@@ -9,8 +9,19 @@ Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop
 
 $xaml=Join-Path $PSScriptRoot 'ParcheCAD.Dashboard.xaml'
 if(!(Test-Path -LiteralPath $xaml -PathType Leaf)){throw 'Falta el layout WPF.'}
+# Respetar WorkArea real (en DIPs) para que 150%/200% no coloque la ventana
+# fuera de la zona visible; el contenido se desplaza verticalmente.
 $reader=[Xml.XmlReader]::Create($xaml)
 try {$window=[Windows.Markup.XamlReader]::Load($reader)}finally{$reader.Dispose()}
+$work=[Windows.SystemParameters]::WorkArea
+if($work.Width -gt 0 -and $work.Height -gt 0){
+    $window.MaxWidth=[Math]::Max(320.0,($work.Width-18.0))
+    $window.MaxHeight=[Math]::Max(260.0,($work.Height-18.0))
+    if($window.MinWidth -gt $window.MaxWidth){$window.MinWidth=$window.MaxWidth}
+    if($window.MinHeight -gt $window.MaxHeight){$window.MinHeight=$window.MaxHeight}
+    $window.Width=[Math]::Min($window.Width,$window.MaxWidth)
+    $window.Height=[Math]::Min($window.Height,$window.MaxHeight)
+}
 $names=@('MainWindow','MetricAutoCAD','MetricRules','MetricConflicts',
  'MetricWeb','MetricProbable','MetricsGrid','ActionsWrap','FirewallCard','WebCard','TopStatus','StatusDot','FirewallHint','MonitorHint',
  'BtnPreview','BtnApply','BtnRollback','BtnAudit','BtnMonitor','BtnStopMonitor',
@@ -26,7 +37,7 @@ foreach($name in $names){
 # Lote A: solo una funcion para reflujo 4/2/1 y 2/1 en WPF.
 # No escalado manual por DPI: WPF usa unidades independientes de dispositivo.
 function PCAD-Layout([double]$WindowWidth) {
-    $usable=[Math]::Max(420.0,($WindowWidth - 72.0))
+    $usable=[Math]::Max(300.0,($WindowWidth - 72.0))
     if($usable -ge 1020){$ui.MetricsGrid.Columns=4}
     elseif($usable -ge 570){$ui.MetricsGrid.Columns=2}
     else {$ui.MetricsGrid.Columns=1}
@@ -41,13 +52,13 @@ if($SelfTest){
     if($ui.BtnStopMonitor.IsEnabled -or $ui.BtnCancel.IsEnabled){throw 'WPF: dangerous initial controls.'}
     if($window.Title -notmatch '4.3' -or $ui.BtnPreview.Content.Text -notmatch 'REGLAS' -or
        $ui.BtnAudit.Content.Text -notmatch 'WEBVIEW2'){throw 'WPF: missing dashboard actions.'}
-    foreach($w in @(580.0,780.0,1120.0,1440.0)){
+    foreach($w in @(430.0,580.0,780.0,1120.0,1440.0)){
         PCAD-Layout -WindowWidth $w
         $cols=if($w -ge 1092){4}elseif($w -ge 642){2}else{1}
         if($ui.MetricsGrid.Columns -ne $cols){throw ('WPF responsive metrics failed at '+$w)}
         if($ui.FirewallCard.Width -le 0 -or $ui.FirewallCard.Width -ne $ui.WebCard.Width){throw ('WPF responsive cards failed at '+$w)}
     }
-    Write-Host ('PASS WPF 4.3: XAML loaded, {0} named controls, responsive 580/780/1120/1440 and safety defaults.' -f $names.Count)
+    Write-Host ('PASS WPF 4.3: XAML loaded, {0} named controls, responsive 430/580/780/1120/1440 and safety defaults.' -f $names.Count)
     $window.Close()
     exit 0
 }

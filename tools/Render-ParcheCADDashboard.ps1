@@ -26,8 +26,8 @@ $window.FindName('Progress').Value=100
 
 # Layout A: capturas sinteticas de cuatro anchos de ventana en DIP.
 # Ventana WPF real ajusta estos mismos breakpoints mediante PCAD-Layout.
-foreach($width in @(580,780,1120,1440)){
-    $usable=[Math]::Max(420.0,([double]$width-72.0))
+foreach($width in @(430,580,780,1120,1440)){
+    $usable=[Math]::Max(300.0,([double]$width-72.0))
     $metrics=$window.FindName('MetricsGrid')
     if($usable -ge 1020){$metrics.Columns=4}
     elseif($usable -ge 570){$metrics.Columns=2}
