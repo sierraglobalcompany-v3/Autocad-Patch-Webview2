@@ -72,6 +72,7 @@ $script:MonitorRoot=''
 $script:MonitorStopping=$false
 $script:MonitorStart=Get-Date
 $script:Admin=$null
+$script:AdminMode=''
 $script:AdminStart=Get-Date
 $script:AuditReady=$false
 $script:AuditedApplyPending=$false
@@ -137,6 +138,16 @@ function PCAD-ReportsDir {
         $null=New-Item -ItemType Directory -Path $script:Reports -Force -ErrorAction Stop
     }
 }
+# Un solo boton Informes: directorio verdadero de la ultima operacion.
+function PCAD-CurrentReportFolder {
+    if($script:AdminMode -in @('RestoreFirewall','RestoreWebView2')){
+        return (Join-Path $env:ProgramData 'ParcheCAD\Recovery')
+    }
+    if($script:AdminMode -in @('Apply','Rollback')){
+        return (Join-Path $env:ProgramData 'ParcheCAD\Operations')
+    }
+    return $script:Reports
+}
 function PCAD-StartChild([string]$Kind){
     if($null -ne $script:Child -or $null -ne $script:Admin){return}
     if($Kind -eq 'AUDIT'){
@@ -160,6 +171,7 @@ function PCAD-StartChild([string]$Kind){
     $args='-NoLogo -NoProfile -ExecutionPolicy Bypass -File "{0}" -OutputDirectory "{1}"' -f $file,$dir
     $proc=Start-Process -FilePath $exe -ArgumentList $args -WindowStyle Hidden -RedirectStandardOutput $out -RedirectStandardError $err -PassThru -ErrorAction Stop
     $script:Child=$proc
+    $script:AdminMode=''
     $script:ChildType=$Kind
     $script:ChildRoot=$dir
     $script:ChildLog=$out
@@ -325,6 +337,7 @@ function PCAD-StartMonitor {
     $stderr=$folder+'.stderr.log'
     $args='-NoLogo -NoProfile -ExecutionPolicy Bypass -File "{0}" -OutputDirectory "{1}" -DurationSeconds 600 -IntervalMilliseconds 1000' -f $path,$folder
     $p=Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList $args -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru -ErrorAction Stop
+    $script:AdminMode=''
     $script:Monitor=$p;$script:MonitorRoot=$folder;$script:MonitorStopping=$false;$script:MonitorStart=Get-Date
     $ui.WorkTabs.SelectedIndex=1
     $ui.ResultTabs.SelectedIndex=2
@@ -414,9 +427,10 @@ $ui.BtnMonitor.Add_Click({
 $ui.BtnStopMonitor.Add_Click({try{PCAD-StopMonitor}catch{[Windows.MessageBox]::Show($_.Exception.Message,'Monitor')|Out-Null}})
 $ui.BtnCancel.Add_Click({PCAD-CancelChild})
 $ui.BtnReports.Add_Click({
-    if(Test-Path -LiteralPath $script:Reports -PathType Container){
-        Start-Process -FilePath 'explorer.exe' -ArgumentList ('"'+$script:Reports+'"')
-    }else{[Windows.MessageBox]::Show('Aún no hay informes.','ParcheCAD')|Out-Null}
+    $target=PCAD-CurrentReportFolder
+    if(Test-Path -LiteralPath $target -PathType Container){
+        Start-Process -FilePath 'explorer.exe' -ArgumentList ('"'+$target+'"')
+    }else{[Windows.MessageBox]::Show('Aún no hay informes en '+$target,'ParcheCAD')|Out-Null}
 })
 function PCAD-ConfirmAutoCADBlock {
     # Una sola operacion elevada para ambos accesos: NO analizador ni reglas WebView2.
@@ -478,7 +492,7 @@ $timer.Add_Tick({
                 $code=2;try{$code=[int]$p.ExitCode}catch{}
                 $p.Dispose();$script:Admin=$null
                 $notice=if($script:AdminMode -in @('RestoreFirewall','RestoreWebView2')){
-                    if($code -eq 0){'Restauracion terminada en consola. Verifica reglas, journal y copia en ProgramData.'}
+                    if($code -eq 0){'El asistente de restauracion termino. Puede no haber quitado reglas; verifica el journal en ProgramData.'}
                     else{'Restauracion cancelada, parcial o fallida; consulta consola y journal. No asumir reparacion.'}
                 }elseif($code -eq 0){
                     'El proceso administrativo terminó (código 0). Aún debes verificar las reglas y el respaldo.'
@@ -486,7 +500,7 @@ $timer.Add_Tick({
                     ('Operación no verificada (código '+$code+'). Consulta la consola y el informe; no se presupone bloqueo.')
                 }
                 $ui.TxtFirewall.Text=$notice+[Environment]::NewLine+
-                    'Abre informes para revisar el journal de esta operación.'
+                    ('Directorio del informe: '+(PCAD-CurrentReportFolder))
                 $ui.WorkTabs.SelectedIndex=0
                 $ui.ResultTabs.SelectedIndex=0
                 PCAD-Status $notice $(if($code -eq 0){'ADMIN_DONE'}else{'ERROR'})
@@ -569,6 +583,12 @@ if($StateSelfTest){
     if($ui.BtnApply.IsEnabled -or $ui.BtnGenericAutoCAD.IsEnabled -or $ui.BtnAuditedBlock.IsEnabled -or $ui.BtnWebRestoreInfo.IsEnabled -or $ui.BtnPreview.IsEnabled -or $ui.BtnExit.IsEnabled){throw 'V43: no bloquea acciones al cerrar'}
     $script:AuditReady=$false
     $script:CloseRequested=$false
+    $script:AdminMode='RestoreFirewall'
+    if((PCAD-CurrentReportFolder) -notlike '*ParcheCAD*Recovery'){throw 'AUDIT10: recovery folder wrong'}
+    $script:AdminMode='Apply'
+    if((PCAD-CurrentReportFolder) -notlike '*ParcheCAD*Operations'){throw 'AUDIT10: apply folder wrong'}
+    $script:AdminMode=''
+    if((PCAD-CurrentReportFolder) -ne $script:Reports){throw 'AUDIT10: read-only reports folder wrong'}
     $valid=[pscustomobject]@{
         Schema='PCAD_AUTOCAD_PREVIEW_1';ReadOnly=$true;NoFirewallChanges=$true
         WebView2SharedExcluded=$true;Status='PREVIEW_COMPLETA';CatalogStatus='OK'
