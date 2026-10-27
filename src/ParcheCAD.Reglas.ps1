@@ -64,24 +64,26 @@ try {
             }
         }else{
             $matches=@(Get-PCADTargetedBlockRules -Kind 'WebView2' | Where-Object {$_.IsBlocking})
-            Write-Host ('WEBVIEW2 COMPARTIDO: {0} bloqueos locales de EXE detectados.' -f $matches.Count) -ForegroundColor Cyan
+            Write-Host ('WEBVIEW2 / AUTODESK: {0} regla(s) historica(s) vinculada(s) por ID/nombre y filtro EXE.' -f $matches.Count) -ForegroundColor Cyan
             foreach($item in $matches){
-                Write-Host ('  {0} / {1} / {2} / Origen {3}' -f
-                    $item.RuleName,$item.Direction,(Protect-PCADPath $item.Program),$item.Ownership)
+                Write-Host ('  {0} / {1} / {2} / Indicio {3}' -f
+                    $item.RuleName,$item.Direction,(Protect-PCADPath $item.Program),$item.AutodeskIntent)
             }
-            Write-Warning 'Reglas WebView2 pueden ser de terceros. Una restauracion afecta TODAS las apps que usen esa ruta.'
+            Write-Warning 'El nombre sugiere Autodesk, pero no prueba exclusividad. El runtime es compartido y quitar esta regla puede afectar todas las apps que usen esa ruta.'
+            Write-Warning 'Reglas genericas o ajenas de WebView2 se EXCLUYEN incluso si bloquean el mismo ejecutable.'
             if($matches.Count -eq 0){
-                Write-Host 'Sin reglas locales de bloqueo por ruta msedgewebview2.exe detectadas. Otras causas no evaluadas.'
+                Write-Host 'No se encontraron reglas WebView2 con vinculo historico explicito Autodesk y filtro de programa.'
+                Write-Host 'Reglas generales de WebView2 y otros mecanismos quedan fuera de esta restauracion.'
                 exit 0
             }
             if(!$ConfirmChange){throw 'Restaurar WebView2 requiere -ConfirmChange.'}
-            $choice=[string](Read-Host 'Escribe el NOMBRE EXACTO de UNA regla WebView2 a quitar; ENTER cancela')
+            $choice=[string](Read-Host 'Escribe el NOMBRE EXACTO de UNA regla Autodesk/WebView2 a quitar; ENTER cancela')
             if(!$choice.Trim()){Write-Host 'Cancelado sin cambios.';exit 0}
             if(@($matches|Where-Object {$_.RuleName -ceq $choice}).Count -ne 1){
-                throw 'No se encontro una regla activa y unica con ese nombre.'
+                throw 'No se encontro una regla Autodesk/WebView2 activa y unica con ese nombre.'
             }
             Write-Warning 'Se exportara toda la politica de firewall para conservar una copia independiente.'
-            if((Read-Host 'Escribe RESTAURAR WEBVIEW2 para retirar SOLO esa regla') -cne 'RESTAURAR WEBVIEW2'){
+            if((Read-Host 'Escribe RESTAURAR AUTODESK WEBVIEW2 para retirar SOLO esa regla') -cne 'RESTAURAR AUTODESK WEBVIEW2'){
                 throw 'Cancelado sin cambios.'
             }
             $result=Invoke-PCADRestoreSelectedRule -Kind WebView2 -RuleName $choice -RecoveryDirectory $recoveryDir -Commit

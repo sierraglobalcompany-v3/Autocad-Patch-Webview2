@@ -342,9 +342,10 @@ function PCAD-ConfirmAutoCADBlock {
 $ui.BtnApply.Add_Click({PCAD-ConfirmAutoCADBlock})
 $ui.BtnGenericAutoCAD.Add_Click({PCAD-ConfirmAutoCADBlock})
 $ui.BtnWebRestoreInfo.Add_Click({
-    $msg='RESTAURAR WEBVIEW2: busca bloqueos activos por ruta msedgewebview2.exe en Windows Firewall.'+
-         [Environment]::NewLine+'Muestra todas las coincidencias; NO restaura el runtime ni elimina reglas sin tu seleccion.'+
-         [Environment]::NewLine+'Las reglas pueden pertenecer a terceros; debes confirmar una por su NOMBRE exacto.'+
+    $msg='RESTAURAR WEBVIEW2 AUTODESK: busca reglas historicas con ID/nombre vinculado a Autodesk y filtro msedgewebview2.exe.'+
+         [Environment]::NewLine+'No muestra ni elimina bloqueos WebView2 generales o de otras aplicaciones.'+
+         [Environment]::NewLine+'La vinculacion del nombre NO demuestra aislamiento: quitar una regla global puede afectar otras apps que compartan WebView2.'+
+         [Environment]::NewLine+'Debes escoger una regla por su NOMBRE exacto.'+
          [Environment]::NewLine+'Antes de retirar una regla creara una copia de la politica en ProgramData. Continuar?'
     if([Windows.MessageBox]::Show($msg,'Restaurar WebView2','YesNo','Warning') -eq 'Yes'){
         try{PCAD-StartAdmin 'RestoreWebView2'}catch{[Windows.MessageBox]::Show($_.Exception.Message,'Restaurar WebView2')|Out-Null}

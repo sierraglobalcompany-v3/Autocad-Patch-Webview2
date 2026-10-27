@@ -19,6 +19,7 @@ $exe=Join-Path $product 'acad.exe'
 $manifest=''
 $ruleName=''
 $webRule=''
+$webOtherRule=''
 $webExe=''
 $hasCleanupError=$false
 try {
@@ -102,18 +103,36 @@ try {
     # de ejecutable msedgewebview2.exe. Solo se elimina tras seleccion exacta.
     $webExe=Join-Path $testDir 'msedgewebview2.exe'
     Copy-Item -LiteralPath (Join-Path $env:WINDIR 'System32\whoami.exe') -Destination $webExe -ErrorAction Stop
-    $webRule='PCAD_QA_WEB_'+[guid]::NewGuid().ToString('N')
-    New-NetFirewallRule -Name $webRule -DisplayName 'Rule with unrelated display name' -Group 'PCAD_QA_TEST' -Program $webExe -Direction Outbound -Action Block -Enabled True -Profile Any -PolicyStore PersistentStore -ErrorAction Stop|Out-Null
-    $webList=@(Get-PCADTargetedBlockRules -Kind 'WebView2'|Where-Object {$_.RuleName -ceq $webRule})
-    if($webList.Count -ne 1 -or !$webList[0].IsBlocking -or $webList[0].Ownership -cne 'NO_VERIFICADA'){
-        throw 'RECOVERY: el filtro WebView2 con nombre ajeno no fue identificado correctamente.'
+    $webRule='SGC_WEBVIEW2_CONTROL_V1_'+[guid]::NewGuid().ToString('N')
+    $webOtherRule='PCAD_QA_UNRELATED_WEB_'+[guid]::NewGuid().ToString('N')
+    New-NetFirewallRule -Name $webRule -DisplayName 'Autodesk AutoCAD WebView2 - legacy test' -Group 'PCAD_QA_TEST' -Program $webExe -Direction Outbound -Action Block -Enabled True -Profile Any -PolicyStore PersistentStore -ErrorAction Stop|Out-Null
+    New-NetFirewallRule -Name $webOtherRule -DisplayName 'WebView2 Global Block - unrelated software' -Group 'PCAD_QA_TEST' -Program $webExe -Direction Outbound -Action Block -Enabled True -Profile Any -PolicyStore PersistentStore -ErrorAction Stop|Out-Null
+    $webList=@(Get-PCADTargetedBlockRules -Kind 'WebView2')
+    if(@($webList|Where-Object {$_.RuleName -ceq $webRule -and $_.IsBlocking -and $_.AutodeskIntent -ne ''}).Count -ne 1){
+        throw 'RESTORE AUTODESK: historic tagged rule not detected by program filter.'
+    }
+    if(@($webList|Where-Object {$_.RuleName -ceq $webOtherRule}).Count -ne 0){
+        throw 'RESTORE AUTODESK: unrelated shared WebView2 block became eligible.'
+    }
+    $rejected=$false
+    try{
+        $null=Invoke-PCADRestoreSelectedRule -Kind WebView2 -RuleName $webOtherRule -RecoveryDirectory $restoreDir -Commit
+    }catch{$rejected=$true}
+    if(!$rejected -or $null -eq (Get-NetFirewallRule -Name $webOtherRule -PolicyStore PersistentStore -ErrorAction Stop)){
+        throw 'RESTORE AUTODESK: generic rule wrongly removed or accepted.'
+    }
+    if((Get-PCADAutodeskWebViewIntent -Name 'SGC_WEBVIEW2_V2_ABCD' -DisplayName 'WebView2 Global Block' -Group '') -ne ''){
+        throw 'RESTORE AUTODESK: ambiguous historic SGC marker without Autodesk evidence allowed.'
     }
     $webDone=Invoke-PCADRestoreSelectedRule -Kind WebView2 -RuleName $webRule -RecoveryDirectory $restoreDir -Commit
     if($webDone.Status -cne 'RESTORED' -or !(Test-Path -LiteralPath $webDone.PolicyBackup) -or
        $null -ne (Get-NetFirewallRule -Name $webRule -PolicyStore PersistentStore -ErrorAction SilentlyContinue)){
-        throw 'RECOVERY: regla WebView2 exacta no retirada tras backup.'
+        throw 'RESTORE AUTODESK: tagged rule not removed after backup.'
     }
-    Write-Host 'PASS F4 RESTORE: AutoCAD PCAD4 sin journal y WebView2 nombre desconocido, copias .wfw, reglas sintéticas retiradas.' -ForegroundColor Green
+    if($null -eq (Get-NetFirewallRule -Name $webOtherRule -PolicyStore PersistentStore -ErrorAction Stop)){
+        throw 'RESTORE AUTODESK: generic WebView2 rule was modified.'
+    }
+    Write-Host 'PASS F4 AUTODESK: recovered historic named rule; generic WebView2 rule retained; backup and safe rejection verified.' -ForegroundColor Green
 
     # Simula una interrupcion despues de que Windows crea la regla, pero
     # antes de registrar CREATED en el journal. No hay procesos ni AV alterados.
@@ -146,15 +165,16 @@ try {
     if($again.Removed -ne 0){throw 'Rollback interrumpido no fue idempotente.'}
     Write-Host 'PASS REAL F10: recuperacion en nuevo proceso tras interrupcion simulada CREATING, sin ejecutable y sin reglas residuales.' -ForegroundColor Green
 
-} finally {
-    if($webRule){
-        $wr=@(Get-NetFirewallRule -Name $webRule -PolicyStore PersistentStore -ErrorAction SilentlyContinue)
+ } finally {
+    foreach($name in @($webRule,$webOtherRule)){
+        if(!$name){continue}
+        $wr=@(Get-NetFirewallRule -Name $name -PolicyStore PersistentStore -ErrorAction SilentlyContinue)
         if($wr.Count -eq 1 -and [string]$wr[0].Group -ceq 'PCAD_QA_TEST'){
             $wf=@($wr[0]|Get-NetFirewallApplicationFilter -ErrorAction Stop)
             if($wf.Count -eq 1 -and [string]$wf[0].Program -ieq $webExe){
-                Remove-NetFirewallRule -Name $webRule -PolicyStore PersistentStore -ErrorAction Stop
+                Remove-NetFirewallRule -Name $name -PolicyStore PersistentStore -ErrorAction Stop
             }else{$hasCleanupError=$true}
-        }
+        }elseif($wr.Count -gt 0){$hasCleanupError=$true}
     }
     if($ruleName) {
         $remaining=Get-NetFirewallRule -Name $ruleName -PolicyStore PersistentStore -ErrorAction SilentlyContinue

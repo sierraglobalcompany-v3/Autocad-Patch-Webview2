@@ -165,11 +165,11 @@
          <Button x:Name="BtnGenericAutoCAD" Grid.Column="0" Style="{StaticResource Secondary}" AutomationProperties.Name="Bloqueo general de AutoCAD, sin analizar WebView2">
           <TextBlock Text="BLOQUEO GENERAL AUTOCAD" TextWrapping="Wrap" TextAlignment="Center"/>
          </Button>
-         <Button x:Name="BtnWebRestoreInfo" Grid.Column="2" Style="{StaticResource Secondary}" AutomationProperties.Name="Restaurar bloqueos de WebView2 detectados con confirmacion individual">
-          <TextBlock Text="RESTAURAR WEBVIEW2" TextWrapping="Wrap" TextAlignment="Center"/>
+         <Button x:Name="BtnWebRestoreInfo" Grid.Column="2" Style="{StaticResource Secondary}" AutomationProperties.Name="Restaurar exclusivamente reglas historicas de WebView2 vinculadas a Autodesk, con confirmacion individual">
+          <TextBlock Text="RESTAURAR WEBVIEW2 AUTODESK" TextWrapping="Wrap" TextAlignment="Center"/>
          </Button>
         </Grid>
-        <TextBlock Text="El bloqueo general afecta solo a ejecutables AutoCAD. WebView2 compartido nunca se bloquea." Style="{StaticResource Meta}" Margin="0,6,0,0"/>
+        <TextBlock Text="El bloqueo general solo cubre AutoCAD. Restaurar WebView2 examina reglas históricas vinculadas a Autodesk; no elimina bloqueos genéricos." Style="{StaticResource Meta}" Margin="0,6,0,0"/>
        </StackPanel>
       </Border>
      </TabItem>

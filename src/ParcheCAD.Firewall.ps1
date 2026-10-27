@@ -328,6 +328,28 @@ function Save-PCADPolicySnapshot {
     return $dest
 }
 
+# Indicio explicito de regla historica dirigida por su CREADOR a Autodesk.
+# Los prefijos historicos no prueban que la instancia de WebView2 sea exclusiva
+# de AutoCAD: restaurar una regla global afecta a todas las apps que compartan EXE.
+function Get-PCADAutodeskWebViewIntent {
+    [CmdletBinding()]
+    param([string]$Name,[string]$DisplayName,[string]$Group)
+    if($Name -match '^(?i:SGC_AUTODESK_BLOCK_V1_)'){
+        return 'ID_HISTORICO_EXPLICITO_AUTODESK'
+    }
+    if($Name -match '^(?i:PCAD_W_V3_|SGC_WEBVIEW2_CONTROL_V1_|SGC_WEBVIEW2_V2_)' -and
+       $DisplayName -match '(?i)AutoCAD|Autodesk'){
+        return 'ID_HISTORICO_Y_ETIQUETA_AUTODESK'
+    }
+    # Historial antiguo: el nombre visible menciona explicitamente Autodesk
+    # y WebView2. No usar una mera coincidencia "WebView2" o "Global".
+    if($Name -match '^(?i:Autodesk Block WebView2)(?:$|[_ .-])' -or
+       $DisplayName -match '^(?i:Autodesk Block WebView2)(?:$|[_ .-])'){
+        return 'NOMBRE_HISTORICO_AUTODESK_WEBVIEW2'
+    }
+    return ''
+}
+
 # Una sola fuente para localizar reglas de bloqueo por ejecutable, aunque el
 # usuario haya eliminado ParcheCAD. Solo se inspecciona PersistentStore local.
 function Get-PCADTargetedBlockRules {
@@ -351,9 +373,16 @@ function Get-PCADTargetedBlockRules {
         foreach($rule in $rules){
             $key=[string]$rule.Name
             if(!$key -or $seen.ContainsKey($key)){continue}
+            $intent=''
+            if($Kind -eq 'WebView2'){
+                $intent=Get-PCADAutodeskWebViewIntent -Name $key -DisplayName ([string]$rule.DisplayName) -Group ([string]$rule.Group)
+                if(!$intent){continue} # No restaurar bloqueos WebView2 generales ni ajenos.
+            }
             $seen[$key]=$true
             $block=([string]$rule.Action -eq 'Block' -and [string]$rule.Enabled -eq 'True')
             [void]$found.Add([pscustomobject]@{
+                AutodeskIntent=$intent
+                SharedRuntimeRisk=($Kind -eq 'WebView2')
                 RuleName=$key
                 Program=$program
                 DisplayName=[string]$rule.DisplayName
@@ -380,8 +409,11 @@ function Invoke-PCADRestoreSelectedRule {
     )
     if(!$Commit -or !(Test-PCADAdministrator)){throw 'Restauracion requiere consentimiento y administrador.'}
     $rules=@(Get-PCADTargetedBlockRules -Kind $Kind | Where-Object {$_.RuleName -ceq $RuleName -and $_.IsBlocking})
-    if($rules.Count -ne 1){throw 'La regla ya no existe, no bloquea o su identidad es ambigua.'}
+    if($rules.Count -ne 1){throw 'La regla ya no existe, no bloquea, no tiene vinculo Autodesk identificable o su identidad es ambigua.'}
     $target=$rules[0]
+    if($Kind -eq 'WebView2' -and [string]$target.AutodeskIntent -eq ''){
+        throw 'Una regla WebView2 generica no es elegible para restaurar Autodesk.'
+    }
     $original=@(Get-NetFirewallRule -Name $RuleName -PolicyStore PersistentStore -ErrorAction Stop)
     if($original.Count -ne 1 -or [string]$original[0].Action -cne 'Block' -or
        [string]$original[0].Enabled -cne 'True' -or
@@ -408,7 +440,10 @@ function Invoke-PCADRestoreSelectedRule {
             $_.RuleName -ceq $RuleName -and $_.Program -ieq $target.Program -and
             $_.DisplayName -ceq $target.DisplayName -and $_.IsBlocking
         })
-        if($now.Count -ne 1){throw 'Regla cambio entre revision y confirmacion.'}
+        if($now.Count -ne 1 -or ($Kind -eq 'WebView2' -and
+            [string]$now[0].AutodeskIntent -cne [string]$target.AutodeskIntent)){
+            throw 'Regla cambio o perdio atribucion historica Autodesk entre revision y confirmacion.'
+        }
         $journal.Status='REMOVING'
         Write-PCADJournal -Journal $journal -File $journalPath
         Remove-NetFirewallRule -Name $RuleName -PolicyStore PersistentStore -ErrorAction Stop
