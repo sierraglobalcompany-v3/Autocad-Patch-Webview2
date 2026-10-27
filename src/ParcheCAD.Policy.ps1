@@ -161,12 +161,20 @@ function Get-PCADActualRuleStatus {
 }
 function New-PCADRulePlan {
     [CmdletBinding()]
-    param([AllowEmptyCollection()][object[]]$Catalog=@(),[switch]$CheckExisting)
+    param([AllowEmptyCollection()][object[]]$Catalog=@(),[switch]$CheckExisting,[switch]$ShowProgress)
     $included=New-Object System.Collections.ArrayList
+    $clock=[Diagnostics.Stopwatch]::StartNew()
+    $lastMessage=-5.0
+    $visited=0
     $excluded=New-Object System.Collections.ArrayList
     $seen=@{}
     foreach($c in @($Catalog)) {
         if($null -eq $c){continue}
+        $visited++
+        if($ShowProgress -and $clock.Elapsed.TotalSeconds-$lastMessage -ge 5){
+            Write-Host ('  Verificando reglas: {0}/{1} entradas examinadas, {2:n1}s. Solo lectura.' -f $visited,@($Catalog).Count,$clock.Elapsed.TotalSeconds)
+            $lastMessage=$clock.Elapsed.TotalSeconds
+        }
         $original=[string]$c.Path
         if([string]$c.Classification -ne 'AUTOCAD_PRODUCTO' -or [string]$c.Policy -ne 'SOLO_INVENTARIO') {
             [void]$excluded.Add([pscustomobject]@{Name=[string]$c.Name;Reason='NO_EXCLUSIVO_O_NO_APROBADO';Path=(Protect-PCADPath $original)})
@@ -203,6 +211,7 @@ function New-PCADRulePlan {
             [void]$excluded.Add([pscustomobject]@{Name=[string]$c.Name;Reason='RUTA_INVALIDA_O_SANEADA';Path=(Protect-PCADPath $original)})
         }
     }
+    if($ShowProgress){Write-Host ('  Reglas: {0} entradas examinadas en {1:n1}s.' -f $visited,$clock.Elapsed.TotalSeconds)}
     $entries=@($included.ToArray()|Sort-Object Year,Program)
     $conflicts=@($entries|Where-Object {$_.Assessment -eq 'NO_APLICAR'}).Count
     return [pscustomobject]@{

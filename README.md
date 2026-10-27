@@ -1,88 +1,59 @@
-# ParcheCAD 4.0 — AutoCAD 2023–2027 y WebView2
+# ParcheCAD 4.3 — Firewall AutoCAD y auditoría WebView2
 
-Proyecto de control y diagnóstico de conectividad para instalaciones de AutoCAD 2023, 2024, 2025, 2026 y 2027 en Windows.
+Aplicación local para Windows y AutoCAD 2023–2027, construida con PowerShell 5.1 y WPF. **Versión de desarrollo, NO RC1 ni release certificado.**
 
-> **Estado: desarrollo F0–F17 en PRs Draft, con ZIP técnico DEV disponible en GitHub Actions. NO RC1, NO release.** CI Windows PS5.1/7 y firewall temporal verde; **sin release 4.0 ni QA gráfica integral/AutoCAD real**. Las versiones históricas 2.x y 3.x no son releases de este repositorio.
+## Abrir y utilizar (sin instalar)
 
-## Objetivo
+1. Extrae el ZIP completo en una carpeta propia, por ejemplo `C:\ParcheCAD_4.3`. No ejecutes los scripts sueltos desde dentro del ZIP.
+2. Ejecuta **`Abrir_ParcheCAD.cmd`**. Se abrirá el tablero WPF; no modifica el firewall al iniciarse.
+3. **Analizar firewall:** inventaría ejecutables de instalaciones locales, revisa rutas, conflictos y filtros en un proceso de solo lectura; puede tardar mientras muestra progreso y permite cancelar.
+4. **Analizar WebView2:** detecta procesos y conexiones observables, clasifica su relación probable con AutoCAD y protege el runtime compartido de Microsoft. Una atribución probable **NO** permite bloquearlo automáticamente.
+5. **Iniciar monitor:** observa temporalmente TCP, endpoints UDP y procesos (máximo 10 minutos). Pulsa detener para guardar el informe; el registro tampoco certifica aislamiento ni ausencia de tráfico.
+6. **Abrir informes:** consulta los JSON y resúmenes locales. Inspecciónalos antes de compartir: pueden contener metadatos de procesos y equipos.
 
-- Identificar instalaciones reales de AutoCAD y sus ejecutables, procesos y servicios asociados.
-- Mostrar el estado de reglas del firewall y detectar bloqueos heredados.
-- Atribuir procesos WebView2 a sus aplicaciones anfitrionas sin confundirlos con el runtime compartido.
-- Evaluar un control de red reversible y por componente, sin afectar WhatsApp, Outlook ni otras aplicaciones.
-- Informar con evidencia de lo que fue detectado, aplicado, comprobado y de lo que permanece sin verificar.
+**Aplicar o revertir reglas:** el motor administrativo sigue disponible, pero **NO se recomienda probarlo en el computador principal** mientras el producto carezca de QA real con AutoCAD, UAC y recuperación verificada. Si se utiliza en un laboratorio autorizado, exige UAC, confirmación escrita, comprobaciones de rutas/filtros/conflictos y respaldo. Un código de salida 0 no demuestra por sí solo que toda conexión esté bloqueada.
 
-**Limitación clave:** bloquear `acad.exe` mediante reglas por ruta no bloquea automáticamente todas las conexiones originadas por `msedgewebview2.exe`. Una regla global para WebView2 puede afectar otras aplicaciones; el programa no la instalará como comportamiento predeterminado. Bloquear el tráfico tampoco impide que WebView2 se ejecute localmente.
+Si WPF no abre, usa **`Abrir_ParcheCAD_Clasico.cmd`** como respaldo temporal. No desactives AVG/Defender ni las políticas de seguridad del equipo.
 
-## Principios del proyecto
+## Qué bloquea y qué no
 
-- **KISS / anti-ruido:** reutilizar y simplificar; no añadir servicios, controladores ni tareas programadas sin pruebas que lo justifiquen.
-- **Primero diagnóstico, luego cambios.** F0 solo lectura, sin reglas, tareas ni modificaciones al registro.
-- **Reversión y QA obligatorios.** Ninguna interfaz debe mostrar “bloqueo completo” sin evidencia funcional.
-- **Sin desactivar antivirus ni eliminar controles de licenciamiento.** El modo sin conexión puede impedir funcionalidades y verificaciones de suscripciones válidas.
-- **Sin datos sensibles en GitHub.** Sanitizar nombres de usuario, rutas personales, IP, tokens y registros antes de compartirlos.
+- El firewall trabaja sobre **ejecutables de AutoCAD identificados y verificados localmente**. Una vista previa como «31 candidatas, 0 conflictos» no significa que haya 31 reglas aplicadas.
+- **No instala un bloqueo global de `msedgewebview2.exe`**: WhatsApp, Outlook y otros programas pueden compartir ese ejecutable. El PID o proceso padre no permite una regla persistente exclusiva.
+- Un bloqueo de red puede afectar funciones online y licencias legítimas de AutoCAD, y **no impide necesariamente que WebView2 se ejecute**.
+- Los sondeos del monitor no capturan todas las conexiones breves, por lo que no certifican aislamiento completo.
 
-## Plan de ejecución
+## Arquitectura y seguridad
 
-1. **F0 — Diagnóstico**: descubrir AutoCAD 2023–2027, WebView2, servicios, firewall y tareas heredadas; exportar un reporte sanitizado.
-2. **F1 — Clasificación**: distinguir ejecutables exclusivos de producto, componentes Autodesk compartidos y procesos Microsoft compartidos.
-3. **F2 — Recuperación y UX**: interfaz responsiva, barra de progreso, estado inicial/final y reversión de reglas propias.
-4. **F3 — Pruebas de tráfico**: medir qué conexiones provienen de cada componente; identificar limitaciones de aislamiento.
-5. **F4 — Controles de firewall**: solo acciones explícitas, reversibles, probadas y con vista previa de impacto.
-6. **F5 — QA / release**: validación real con Windows 10/11, PowerShell 5.1, antivirus activo y varias instalaciones.
+Interfaz única principal **WPF/XAML** + scripts PowerShell existentes. Vista previa y auditoría en procesos separados y cancelables; monitor de duración limitada; reglas y recuperación separadas y elevadas solo con consentimiento. Ningún servicio residente, controlador, dependencia externa ni modificación permanente de ExecutionPolicy. Las políticas obligatorias del equipo tienen prioridad.
 
-**Estado técnico:** F0–F2 inventario y GUI, F3 atribución observacional WebView2, F4 reglas salientes y reversión verificadas con mocks y un ejecutable temporal en Windows, F5 soporte de rutas personalizadas y saneamiento, F6 detección de DisplayIcon, recuperación de regla real interrumpida simulada y ZIP verificable; F7 bloquea nuevas reglas con respaldos corruptos o pendientes; F8 centraliza la validación del resultado del diagnóstico; F9 corrige el manejo de controles y ejecuta los eventos Analizar/Cancelar/Cerrar en Windows descartable; F10 confirma la terminación del proceso propio y recupera un journal CREATING desde otro proceso PS5.1; F11 añade una matriz de cobertura solo lectura de ejecutables de producto, servicios compartidos, WebView2 y conexiones observadas en JSON/TXT/WinForms. El diagnóstico usa un marcador de finalización explícito para evitar falsos estados completos. F12 agrega evaluación de diez puertas RC1 a partir de dos diagnósticos, sin cambios al sistema y sin emitir falsos PASS. F13 demuestra en Windows desechable que una regla por EXE ficticio impide efectivamente TCP IPv4 y que el rollback restaura la conexión, sin bloquear otro EXE. La vista previa no crea reglas. **No hay certificación de aislamiento completo de Autodesk/WebView2.**
+**Leyes del proyecto:** KISS, anti-ruido (eliminar, integrar o mejorar con evidencia), no parches sobre parches y diseño legible/adaptable. Git conserva el historial técnico; el ZIP incluye únicamente las piezas ejecutables y documentos vigentes.
 
-Para ejecutar el diagnóstico en consola: `powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File .\src\ParcheCAD.Diagnostico.ps1`. Para visualizar un plan de reglas de solo lectura: `powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File .\src\ParcheCAD.Reglas.ps1 -Mode Preview`.
+## Estado y documentación
 
-**No ejecutar todavía Apply/Rollback en el equipo principal**: aunque los escenarios de reglas temporales y recuperación de journal CREATING pasaron en un Windows descartable, faltan QA visual de la interfaz, AutoCAD instalado, reinicio/interrupción abrupta real y verificaciones de cobertura. El panel ofrece cambios solo tras UAC y doble confirmación.
+Las pruebas de CI incluyen PowerShell 5.1/7, paquete reproducible SHA-256, reglas temporales sintéticas y renderizado WPF. **No reemplazan** una prueba interactiva con AutoCAD en Windows real, distintas escalas DPI, UAC y reversión. Release permanece **BLOCKED**.
 
-**Paquete técnico DEV (NO RELEASE):** `tools/Build-ParcheCAD.ps1` genera un ZIP sin logs privados, con manifiesto de hashes. GitHub Actions lo valida dos veces y publica un artifact temporal de desarrollo; no se recomienda ejecutarlo en el computador principal antes de RC1. Ver `docs/F6_PAQUETE_PRE_RC.md`.
+- `docs/SPEC_MAESTRA.md`: contrato técnico, alcance y protecciones del motor.
+- `docs/V43_DASHBOARD_WPF.md`: auditoría, plan KISS, QA y pendientes de interfaz.
+- `docs/F17_PROTOCOLO_QA_INTEGRADA.md`: protocolo único de aceptación en laboratorio aislado.
 
-**F12 QA integrada (solo lectura):** `tools/Invoke-ParcheCADRC12.ps1` compara dos diagnósticos ya generados, entrega una matriz de diez puertas y mantiene RC1 como BLOCKED hasta comprobar AutoCAD real, tráfico, WebView2, UAC, reinicio y AVG. Guía: `docs/F12_GATE_RC1_QA_INTEGRADA.md`.
-
-**F13 evidencia de tráfico:** `docs/F13_PRUEBA_EGRESO_TCP_REAL.md`, prueba sintética de conexión antes/bloqueo/después; **NO** certifica AutoCAD real, servicios Autodesk o WebView2.
-
-**F16 integridad de filtros:** `docs/F16_INTEGRIDAD_FILTROS_FIREWALL.md`. Una regla propia con protocolo, puertos, IP, servicio, tipo o alias de interfaz restringidos pasa a CONFLICT y no se considera bloqueo completo ni se modifica automáticamente. Prueba real sobre regla temporal y mocks PS5.1/7.
-
-**F15 integridad de rutas:** `docs/F15_REPARSE_GUARD_QA.md`. El plan y la escritura del firewall rechazan enlaces/junctions que puedan redirigir un EXE bajo AutoCAD hacia una aplicación ajena; la reversión continúa siendo posible para reglas propias. CI #119 PASS, sin AutoCAD real.
-
-**F14 inventario compartido:** `docs/F14_INVENTARIO_COMPARTIDO_QA.md`. Se exploran carpetas habituales de componentes Autodesk compartidos con límites explícitos; aparecen en el inventario, **no** en las reglas automáticas. Un escaneo parcial se muestra como tal.
-
-**NEXT:** preparar ejecución única de QA integrada en Windows de escritorio aislado, con AutoCAD real, sin pedir pruebas parciales en el computador principal. Si ese entorno no está disponible, las puertas siguen BLOCKED y no se declara RC1.
-
-## Desarrollo
-
-Los cambios de código se implementarán en ramas y PRs revisables. No se copiarán los antiguos scripts de bloqueo sin auditoría y pruebas. El diseño técnico vigente estará en `docs/SPEC_MAESTRA.md`.
-
-## Aviso
-
-Herramienta independiente, no afiliada a Autodesk o Microsoft. El comportamiento de conectividad puede afectar funciones o licencias del software; ninguna medición o bloqueo equivale a modificar derechos de uso.
+Proyecto independiente, no afiliado a Autodesk o Microsoft. No alteres licenciamiento, software ajeno ni reglas de terceros.
 
 
-## F17 — QA integrada, laboratorio solamente
-La rama F17 incorpora `tools/Invoke-ParcheCADF17.ps1` para capturas de diagnóstico `Before` y `After` separadas y evaluación `Evaluate` usando F12, sin modificaciones al firewall. Documento operativo: `docs/F17_PROTOCOLO_QA_INTEGRADA.md`. Prueba: `tests/F17.Session.Tests.ps1`. La matriz generada siempre deja evidencias externas pendientes y `Decision=BLOCKED`; NO RC1, sin pruebas reales de AutoCAD ni WebView2 exclusivo.
+### Pantalla compacta sin desplazamiento normal
+
+El panel principal usa dos pestañas —**Firewall AutoCAD** y **Analizador WebView2**—; muestra únicamente las acciones de la tarea activa, cuatro métricas, progreso y botones de cierre. Los detalles técnicos permanecen plegados en **Detalles e informes**. A tamaño normal (1050×665 unidades WPF), el diseño busca evitar scroll vertical. En pantallas pequeñas o con escalado de accesibilidad elevado conserva scroll para no ocultar controles. La interfaz no altera los scripts ni las garantías de seguridad.
 
 
-## Monitor temporal de AutoCAD/WebView2 (F17)
+### Bloqueo general y restauración
 
-El panel incorpora **INICIAR MONITOR** y **DETENER MONITOR Y GUARDAR LOG**. Tras iniciar, abrir y probar AutoCAD; el monitor lee procesos y conexiones TCP/endpoints UDP, permite seguir usando Apply/Rollback con las confirmaciones existentes y al detener genera `informes/monitor_*/monitor.json` y `resumen.txt`. Finaliza automaticamente a los 10 minutos si no se detiene manualmente. El informe no guarda IP, URLs, parametros ni rutas privadas. No instala servicios ni cambia firewall o antivirus. **El sondeo NO captura todo el trafico, ni verifica intentos de bloqueo o aislamiento de WebView2**; no confundir actividad observada con ausencia de red. Guía: `docs/F17_PROTOCOLO_QA_INTEGRADA.md`.
-
-
-## ParcheCAD 4.1 (DEV / NO RELEASE)
-
-Panel WinForms reordenado: acciones agrupadas; estado del diagnostico independiente del monitor; dos pestanas para informes; razon visible cuando Aplicar no cumple los gates. Mantiene las reglas de seguridad y excluye WebView2 compartido. El launcher y sus tres procesos hijos usan ExecutionPolicy Bypass temporal solamente en cada proceso; no ejecuta Set-ExecutionPolicy y las politicas empresariales GPO siguen prevaleciendo. Suite de paquete con ZIP extraido y marca de Internet Zone.Identifier. RC1 pendiente de prueba visual y AutoCAD real. Ver docs/V41_CAMBIOS_AUDITORIA.md.
+El acceso **Bloqueo general AutoCAD** reutiliza el mismo motor de aplicación del firewall y NO bloquea WebView2 compartido. La recuperación consta de exactamente **dos botones**: **Restaurar Firewall** (detecta reglas salientes AutoCAD y firmas persistentes PCAD4 aun sin carpeta/JSON) y **Restaurar WebView2 Autodesk** (detecta únicamente reglas antiguas con indicios explícitos de Autodesk/ParcheCAD *y* filtro `msedgewebview2.exe`; nunca todos los bloqueos del runtime). Ambos trabajan sobre las reglas reales de Windows Firewall. Primero enumeran y muestran hallazgos; antes de quitar algo requieren administrador, confirmación escrita y crean una exportación `.wfw` más un registro en `%ProgramData%\ParcheCAD\Recovery`. Las reglas históricas elegibles se retiran **solo una a una**, mediante su nombre exacto y autorización explícita. Las reglas WebView2 genéricas quedan fuera de este restaurador. Los nombres sugieren intención, pero no prueban que el runtime Microsoft se utilice exclusivamente por AutoCAD. Ninguna operación restaura el ejecutable Microsoft ni revierte GPO, antivirus o configuraciones fuera de Windows Firewall. No declares éxito sin volver a comprobar el estado.
 
 
-## ParcheCAD 4.2 — Separacion funcional (DEV, no RC1)
+### Bloqueo auditado — diferenciación del monitor
 
-**Firewall AutoCAD directo:** Ver reglas AutoCAD y Verificar y aplicar ya no requieren haber ejecutado el analizador de diez pasos. El motor de reglas revalida el catalogo conocido de ejecutables dentro de la instalacion AutoCAD, rutas, filtros, conflictos, UAC, confirmacion escrita y respaldo antes de modificar Windows. No escanea la red ni enumera servicios Autodesk compartidos durante esa operacion. Si faltan rutas o hay conflictos, aborta sin nuevas reglas. El diagnostico general anterior se conserva como herramienta tecnica compatible, pero no es requisito del firewall.
-
-**Auditoria WebView2 independiente:** boton Auditar WebView2 ejecuta una instantanea solo lectura, atribuye anfitrion como probable/indeterminado y lista por que el runtime compartido NO puede bloquearse selectivamente con una regla persistente por PID. Monitor continuo temporal separado. No se generan reglas WebView2.
-
-Interfaz 4.2: tarjetas y botones con jerarquia, paneles blancos, y pestañas separadas. Ver docs/V42_ARQUITECTURA_QA.md.
+**ANALIZAR WEBVIEW2** es lectura puntual. **INICIAR MONITOR** observa procesos y conexiones durante diez minutos como máximo, y nunca bloquea. **BLOQUEO AUDITADO AUTOCAD** comienza deshabilitado: solo se habilita cuando termina correctamente el análisis WebView2. Al pulsarlo vuelve a analizar las reglas y ejecutables de AutoCAD (vista previa adicional), y **solo si** el plan está completo, tiene al menos un EXE elegible y cero conflictos ofrece confirmar el bloqueo de **ejecutables AutoCAD** mediante el motor UAC ya existente. El motor elevado vuelve a verificar todo y exige escribir `APLICAR`. **No bloquea el WebView2 compartido** ni convierte parentesco PID en criterio de regla de firewall; si se necesita impedir exclusivamente WebView2 de AutoCAD, esta versión no lo ofrece. **BLOQUEO GENERAL AUTOCAD** sigue siendo un acceso distinto que revalida AutoCAD sin exigir el análisis WebView2.
 
 
-### ParcheCAD 4.2 — Vista previa de reglas sin bloquear el panel
+### Estado real tras aplicar
 
-`VER REGLAS AUTOCAD` usa `src/ParcheCAD.Preview.ps1` en un proceso PowerShell hijo de **solo lectura**. El inventario por carpetas y las consultas `Get-NetFirewallRule` ya no se ejecutan en el hilo WinForms. El panel muestra barra animada (Marquee), etapa 1/3–3/3 y segundos transcurridos; permite cancelar exclusivamente su proceso hijo sin afectar AutoCAD ni el firewall. El archivo `informes/preview_*/preview.json` confirma estado, candidatos y conflictos sin rutas privadas ni reglas creadas. Aplicar conserva las comprobaciones del motor, UAC, confirmación y recuperación. No inferir porcentaje de una fase. QA F9 y F6; RC1 pendiente en Windows del usuario.
+**Analizar Firewall** muestra **reglas válidas / total**, faltantes y conflictos; **31 candidatas** no significa 31 aplicadas. La vista previa es siempre solo lectura. **Verificar y aplicar** requiere UAC y **una única confirmación escrita `APLICAR` en la consola elevada** (sin diálogo adicional en WPF). La interfaz muestra avance indeterminado desde el principio y las etapas 1/3–3/3, luego `N/N` durante creación/verificación. Al acabar solo muestra **APLICADO Y VERIFICADO LOCALMENTE** si el motor elevó, verificó todos los filtros y guardó el journal `APPLIED` del ID de operación correcto en `%ProgramData%\ParcheCAD\Operations`. Un código 0 aislado no basta. Esto **no demuestra** que el tráfico real esté bloqueado ni constituye una prueba de licenciamiento.

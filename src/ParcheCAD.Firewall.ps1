@@ -79,11 +79,35 @@ function Invoke-PCADRollbackRules {
     Write-PCADJournal -Journal $journal -File $JournalPath
     return [pscustomobject]@{Status=$journal.Status;Removed=$count;Remaining=$remaining;Messages=@($results.ToArray());Manifest=$JournalPath}
 }
+# UI progress is transient and never authorizes firewall changes.
+function Write-PCADApplyProgress {
+    [CmdletBinding()]
+    param([Parameter(Mandatory=$true)][string]$Path,
+        [ValidateSet('DISCOVERY','CATALOG','RULES','AWAIT_CONFIRM','APPLY','VERIFYING')][string]$Stage,
+        [int]$Completed=0,[int]$Total=0)
+    $file=[IO.Path]::GetFullPath($Path)
+    $parent=[IO.Path]::GetDirectoryName($file)
+    if(!(Test-Path -LiteralPath $parent -PathType Container)){throw 'Directorio de progreso inexistente.'}
+    $obj=[ordered]@{
+        Schema='PCAD4_APPLY_PROGRESS_1';Stage=$Stage
+        Completed=$Completed;Total=$Total;UpdatedAt=(Get-Date).ToString('o')
+    }
+    $tmp=$file+'.pending'
+    [IO.File]::WriteAllText($tmp,($obj|ConvertTo-Json -Compress),[Text.UTF8Encoding]::new($false))
+    if([IO.File]::Exists($file)){
+        # .NET Framework 4.x en PowerShell 5.1 requiere backup no vacio.
+        $backup=$file+'.prev'
+        [IO.File]::Replace($tmp,$file,$backup)
+        try{if([IO.File]::Exists($backup)){[IO.File]::Delete($backup)}}catch{}
+    }else{[IO.File]::Move($tmp,$file)}
+}
 function Invoke-PCADApplyPlan {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory=$true)]$Plan,
         [Parameter(Mandatory=$true)][string]$BackupDirectory,
+        [ValidatePattern('^[a-f0-9]{32}$')][string]$OperationId='',
+        [string]$ProgressFile='',
         [switch]$Commit
     )
     if(!$Commit){throw 'Aplicar requiere confirmacion explicita -Commit.'}
@@ -94,12 +118,14 @@ function Invoke-PCADApplyPlan {
     if(!(Test-Path -LiteralPath $BackupDirectory -PathType Container)) {
         $null=New-Item -ItemType Directory -Path $BackupDirectory -Force -ErrorAction Stop
     }
+    if(!$OperationId){$OperationId=[guid]::NewGuid().ToString('N')}
     $journal=[pscustomobject]@{
-        Schema='PCAD4_OPERATION_1';OperationId=[guid]::NewGuid().ToString('N')
+        Schema='PCAD4_OPERATION_1';OperationId=$OperationId
         CreatedAt=(Get-Date).ToString('o');FinishedAt='';Status='PREPARED'
         Operations=@();Notes='Contiene rutas locales; no publicar este archivo en GitHub.'
     }
     $journalPath=Join-Path $BackupDirectory ('PCAD4_'+$journal.OperationId+'.json')
+    if(Test-Path -LiteralPath $journalPath){throw 'ID de operacion ya existente; no reutilizar.'}
     $seen=@{}
     foreach($e in $entries){
         $path=Assert-PCADManagedEntry -Entry $e
@@ -117,10 +143,11 @@ function Invoke-PCADApplyPlan {
     }
     Write-PCADJournal -Journal $journal -File $journalPath
     $created=0
+    $checked=0
     $stage='APPLY_START'
     try {
         foreach($e in @($journal.Operations)){
-            if($e.State -ne 'PENDING'){continue}
+            if($e.State -ne 'PENDING'){$checked++;continue}
             $state=Get-PCADActualRuleStatus -RuleName $e.RuleName -Program $e.Program
             if($state.State -ne 'MISSING'){throw ('Regla cambio antes de aplicar: '+$e.RuleName)}
             $e.State='CREATING'
@@ -136,12 +163,23 @@ function Invoke-PCADApplyPlan {
             $after=Get-PCADActualRuleStatus -RuleName $e.RuleName -Program $e.Program
             if($after.State -ne 'EXISTS_VALID'){throw ('No se pudo verificar regla creada: '+$e.RuleName)}
             $created++
-            Write-Progress -Activity 'ParcheCAD - aplicando reglas propias' -Status $e.RuleName -PercentComplete ([int](100*$created/$entries.Count))
+            $checked++
+            if($ProgressFile){Write-PCADApplyProgress -Path $ProgressFile -Stage 'APPLY' -Completed $checked -Total $entries.Count}
+            Write-Progress -Activity 'ParcheCAD - aplicando reglas propias' -Status ('Verificadas {0}/{1}' -f $checked,$entries.Count) -PercentComplete ([int](100*$checked/$entries.Count))
+        }
+        # APPLIED acredita la verificacion local de todas las reglas, no el trafico.
+        $stage='FINAL_VERIFICATION'
+        if($ProgressFile){Write-PCADApplyProgress -Path $ProgressFile -Stage 'VERIFYING' -Completed $checked -Total $entries.Count}
+        foreach($e in @($journal.Operations)){
+            $state=Get-PCADActualRuleStatus -RuleName $e.RuleName -Program $e.Program
+            if($state.State -cne 'EXISTS_VALID'){
+                throw ('Verificacion final fallida: '+$e.RuleName+' / '+$state.State)
+            }
         }
         $journal.Status='APPLIED'
         $journal.FinishedAt=(Get-Date).ToString('o')
         Write-PCADJournal -Journal $journal -File $journalPath
-        return [pscustomobject]@{Status='APPLIED';Created=$created;Manifest=$journalPath;TrafficVerified=$false}
+        return [pscustomobject]@{Status='APPLIED';Created=$created;Verified=$entries.Count;Manifest=$journalPath;TrafficVerified=$false}
     }catch {
         $reason=$_.Exception.Message
         $journal.Status='ERROR_PARTIAL'
@@ -153,4 +191,315 @@ function Invoke-PCADApplyPlan {
             Error=$reason;ErrorStage=$stage;Manifest=$journalPath;Recovery=$rollback;TrafficVerified=$false
         }
     } finally {Write-Progress -Activity 'ParcheCAD - aplicando reglas propias' -Completed}
+}
+
+
+# Recuperacion tras borrar la carpeta ParcheCAD: identifica SOLO reglas con
+# firma estructural PCAD4 exacta que persiste en Windows Firewall.
+# El nombre, grupo y display no son una prueba criptografica de origen.
+function Get-PCADRecoverableRules {
+    [CmdletBinding()]
+    param([AllowEmptyCollection()][object[]]$FirewallRules=@(),[switch]$ProvidedRules)
+    if(!$ProvidedRules){
+        # La enumeracion y todos los filtros deben completarse: error = FAIL CLOSED.
+        $FirewallRules=@(Get-NetFirewallRule -PolicyStore PersistentStore -ErrorAction Stop)
+    }
+    $candidates=New-Object System.Collections.ArrayList
+    $warnings=New-Object System.Collections.ArrayList
+    $review=New-Object System.Collections.ArrayList
+    $matched=0
+    foreach($rule in @($FirewallRules)){
+        if($null -eq $rule){continue}
+        $name=[string]$rule.Name
+        $group=[string]$rule.Group
+        $display=[string]$rule.DisplayName
+        $looksManaged=($name -match '^PCAD4_A_[0-9a-fA-F]{24}_OUT$' -or $group -ceq 'PCAD4_MANAGED')
+        $looksWeb=($name+' '+$display+' '+$group) -match '(?i)webview2|msedgewebview2'
+        $looksCad=($name+' '+$display+' '+$group) -match '(?i)AutoCAD|Autodesk|SGC_AUTODESK'
+        if(!$looksManaged -and !$looksWeb -and !$looksCad){continue}
+        if(!$looksManaged){
+            [void]$review.Add([pscustomobject]@{RuleName=$name;Reason='REGLA_HISTORICA_O_AJENA_SIN_ID_PC4';Removable=$false})
+            continue
+        }
+        $matched++
+        if($matched -gt 900){throw 'Demasiadas reglas con firma ParcheCAD: revision manual obligatoria.'}
+        try{
+            if($name -cnotmatch '^PCAD4_A_[0-9A-F]{24}_OUT$' -or $group -cne 'PCAD4_MANAGED'){
+                throw 'Firma de nombre/grupo incompleta.'
+            }
+            $m=[regex]::Match($display,'^ParcheCAD 4\.0 - AutoCAD (202[3-7]) - ([^\\/]+\.exe)$',[Text.RegularExpressions.RegexOptions]::IgnoreCase)
+            if(!$m.Success){throw 'DisplayName historico no reconocido.'}
+            $year=[int]$m.Groups[1].Value
+            $programFilter=@($rule | Get-NetFirewallApplicationFilter -ErrorAction Stop)
+            if($programFilter.Count -ne 1){throw 'Filtro de programa no unico.'}
+            $path=Get-PCADCanonicalProgram -Path ([string]$programFilter[0].Program)
+            if([IO.Path]::GetFileName($path) -ine $m.Groups[2].Value -or
+                [IO.Path]::GetFileName($path) -ieq 'msedgewebview2.exe'){
+                throw 'Programa no corresponde a la identidad AutoCAD.'
+            }
+            # En recuperacion SIN journal solo se consideran instalaciones con
+            # segmento explicito AutoCAD YYYY. Custom roots requieren manifest.
+            $null=Assert-PCADProgramInstallRoot -Program $path -Year $year -InstallRoot '' -AllowMissing
+            if($name -cne (Get-PCADRuleName -Program $path)){
+                throw 'Hash del nombre no corresponde a programa.'
+            }
+            $status=Get-PCADActualRuleStatus -RuleName $name -Program $path
+            if($status.State -cne 'EXISTS_VALID'){throw ('Estado de filtros: '+$status.State)}
+            [void]$candidates.Add([pscustomobject]@{
+                RuleName=$name;Program=$path;Year=$year
+                Group='PCAD4_MANAGED';DisplayName=$display
+                Removable=$true;Identification='FIRMA_ESTRUCTURAL_COMPATIBLE_NO_CRIPTOGRAFICA'
+            })
+        }catch{
+            # Una regla alterada, desconocida o ambigua NUNCA entra en la lista.
+            [void]$review.Add([pscustomobject]@{RuleName=$name;Reason='IDENTIDAD_NO_VERIFICADA';Removable=$false})
+            [void]$warnings.Add('Regla de posible ParcheCAD no verificable; requiere revision manual.')
+        }
+    }
+    return [pscustomobject]@{
+        Status='SCAN_COMPLETO';ReadOnly=$true
+        Candidates=@($candidates.ToArray())
+        NeedsReview=@($review.ToArray())
+        Warnings=@($warnings.ToArray())
+        VerifiedCount=$candidates.Count
+        UnverifiedCount=$review.Count
+        Ownership='FIRMA_COMPATIBLE; NO PRUEBA CRIPTOGRAFICA'
+        WebViewGlobalRemovalAllowed=$false
+    }
+}
+function Invoke-PCADRecoverWithoutJournal {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)][string]$RecoveryDirectory,
+        [AllowEmptyCollection()][string[]]$RuleNames=@(),
+        [switch]$Commit
+    )
+    if(!$Commit){throw 'Recuperacion sin manifest requiere confirmacion explicita.'}
+    if(!(Test-PCADAdministrator)){throw 'Recuperacion requiere administrador.'}
+    $scan=Get-PCADRecoverableRules
+    if($scan.Status -cne 'SCAN_COMPLETO'){throw 'Inventario incompleto, no recuperar.'}
+    $eligible=@($scan.Candidates)
+    if($RuleNames.Count -gt 0){
+        $wanted=@{}
+        foreach($name in $RuleNames){$wanted[$name]=$true}
+        $eligible=@($eligible|Where-Object {$wanted.ContainsKey([string]$_.RuleName)})
+        if($eligible.Count -ne $wanted.Count){throw 'Alguna regla elegida no existe o no es elegible.'}
+    }
+    if(!$eligible.Count){
+        return [pscustomobject]@{Status='NO_CANDIDATES';Removed=0;Remaining=0;Review=$scan.UnverifiedCount}
+    }
+    if($eligible.Count -gt 900){throw 'Demasiadas reglas; no modificar.'}
+    if(!(Test-Path -LiteralPath $RecoveryDirectory -PathType Container)){
+        $null=New-Item -ItemType Directory -Path $RecoveryDirectory -Force -ErrorAction Stop
+    }
+    $id=[guid]::NewGuid().ToString('N')
+    $journalPath=Join-Path $RecoveryDirectory ('RECOVERY_'+$id+'.json')
+    # El informe de recuperacion se guarda FUERA del programa, en ProgramData
+    # (salvo el directorio de QA elegido explicitamente).
+    $journal=[pscustomobject]@{
+        Schema='PCAD4_JOURNAL_FREE_RECOVERY_1';Id=$id
+        CreatedAt=(Get-Date).ToString('o');FinishedAt='';Status='PREPARED';PolicyBackup=''
+        Notes='Snapshot previo a retirar reglas de firma estructural ParcheCAD; no prueba autoria criptografica.'
+        Operations=@($eligible|ForEach-Object{
+            [pscustomobject]@{RuleName=$_.RuleName;Program=$_.Program;Year=$_.Year
+                DisplayName=$_.DisplayName;State='PENDING';Group=$_.Group}
+        })
+    }
+    Write-PCADJournal -Journal $journal -File $journalPath
+    $journal.PolicyBackup=Save-PCADPolicySnapshot -RecoveryDirectory $RecoveryDirectory
+    Write-PCADJournal -Journal $journal -File $journalPath
+    $removed=0
+    foreach($entry in @($journal.Operations)){
+        try{
+            # Reescanea antes de cada operacion para evitar cambios entre clicks.
+            $existing=@(Get-NetFirewallRule -Name $entry.RuleName -PolicyStore PersistentStore -ErrorAction Stop)
+            if($existing.Count -ne 1 -or [string]$existing[0].Group -cne 'PCAD4_MANAGED' -or
+               [string]$existing[0].DisplayName -cne [string]$entry.DisplayName -or
+               [string]$entry.RuleName -cne (Get-PCADRuleName -Program $entry.Program)){
+                throw 'Identidad de regla ha cambiado; no borrar.'
+            }
+            $status=Get-PCADActualRuleStatus -RuleName $entry.RuleName -Program $entry.Program
+            if($status.State -cne 'EXISTS_VALID'){throw 'Filtros cambiados; no borrar.'}
+            $entry.State='REMOVING'
+            Write-PCADJournal -Journal $journal -File $journalPath
+            Remove-NetFirewallRule -Name $entry.RuleName -PolicyStore PersistentStore -ErrorAction Stop
+            $after=Get-PCADActualRuleStatus -RuleName $entry.RuleName -Program $entry.Program
+            if($after.State -cne 'MISSING'){throw 'Regla persiste tras recuperacion.'}
+            $entry.State='REMOVED'
+            $removed++
+        }catch{
+            $entry.State='REVIEW_REQUIRED'
+            $journal.Status='PARTIAL'
+        }
+        Write-PCADJournal -Journal $journal -File $journalPath
+    }
+    $remaining=@($journal.Operations|Where-Object {$_.State -ne 'REMOVED'}).Count
+    $journal.Status=if($remaining){'PARTIAL'}else{'RECOVERED'}
+    $journal.FinishedAt=(Get-Date).ToString('o')
+    Write-PCADJournal -Journal $journal -File $journalPath
+    return [pscustomobject]@{
+        Status=$journal.Status;Removed=$removed;Remaining=$remaining
+        Review=$scan.UnverifiedCount;Journal=$journalPath
+        TrafficVerified=$false
+    }
+}
+
+
+# Copia independiente del folder de la app, previa a TODA restauracion sin manifest.
+# La exportacion .wfw es para soporte/recuperacion; NO importar automaticamente
+# porque eso reemplazaria el conjunto completo de reglas del equipo.
+function Save-PCADPolicySnapshot {
+    [CmdletBinding()]
+    param([Parameter(Mandatory=$true)][string]$RecoveryDirectory)
+    if(!(Test-PCADAdministrator)){throw 'Exportar politica de firewall requiere administrador.'}
+    if(!(Test-Path -LiteralPath $RecoveryDirectory -PathType Container)){
+        $null=New-Item -ItemType Directory -Path $RecoveryDirectory -Force -ErrorAction Stop
+    }
+    $dest=Join-Path $RecoveryDirectory ('PolicyBeforeRestore_'+[guid]::NewGuid().ToString('N')+'.wfw')
+    $exe=Join-Path $env:WINDIR 'System32\netsh.exe'
+    if(!(Test-Path -LiteralPath $exe -PathType Leaf)){throw 'No se encontro netsh de Windows.'}
+    & $exe advfirewall export $dest | Out-Null
+    if($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $dest -PathType Leaf) -or
+       (Get-Item -LiteralPath $dest -ErrorAction Stop).Length -lt 1024){
+        throw 'No se creo la copia de la politica completa; no se restaurara ninguna regla.'
+    }
+    return $dest
+}
+
+# Indicio explicito de regla historica dirigida por su CREADOR a Autodesk.
+# Los prefijos historicos no prueban que la instancia de WebView2 sea exclusiva
+# de AutoCAD: restaurar una regla global afecta a todas las apps que compartan EXE.
+function Get-PCADAutodeskWebViewIntent {
+    [CmdletBinding()]
+    param([string]$Name,[string]$DisplayName,[string]$Group)
+    if($Name -match '^(?i:SGC_AUTODESK_BLOCK_V1_)'){
+        return 'ID_HISTORICO_EXPLICITO_AUTODESK'
+    }
+    if($Name -match '^(?i:PCAD_W_V3_|SGC_WEBVIEW2_CONTROL_V1_|SGC_WEBVIEW2_V2_)' -and
+       $DisplayName -match '(?i)AutoCAD|Autodesk'){
+        return 'ID_HISTORICO_Y_ETIQUETA_AUTODESK'
+    }
+    # Historial antiguo: el nombre visible menciona explicitamente Autodesk
+    # y WebView2. No usar una mera coincidencia "WebView2" o "Global".
+    if($Name -match '^(?i:Autodesk Block WebView2)(?:$|[_ .-])' -or
+       $DisplayName -match '^(?i:Autodesk Block WebView2)(?:$|[_ .-])'){
+        return 'NOMBRE_HISTORICO_AUTODESK_WEBVIEW2'
+    }
+    return ''
+}
+
+# Una sola fuente para localizar reglas de bloqueo por ejecutable, aunque el
+# usuario haya eliminado ParcheCAD. Solo se inspecciona PersistentStore local.
+function Get-PCADTargetedBlockRules {
+    [CmdletBinding()]
+    param([ValidateSet('AutoCAD','WebView2')][string]$Kind)
+    $found=New-Object System.Collections.ArrayList
+    $seen=@{}
+    $filters=@(Get-NetFirewallApplicationFilter -PolicyStore PersistentStore -All -ErrorAction Stop)
+    if($filters.Count -gt 35000){throw 'Inventario de firewall excesivo; no decidir restauracion.'}
+    foreach($filter in $filters){
+        $program=[string]$filter.Program
+        if([string]::IsNullOrWhiteSpace($program)){continue}
+        $isTarget=if($Kind -eq 'WebView2'){
+            ($program -match '(?i)(?:^|[\\/])msedgewebview2\.exe$')
+        }else{
+            ($program -match '(?i)[\\/]AutoCAD 202[3-7][\\/].+\.exe$' -and
+             $program -notmatch '(?i)msedgewebview2\.exe$')
+        }
+        if(!$isTarget){continue}
+        $rules=@(Get-NetFirewallRule -AssociatedNetFirewallApplicationFilter $filter -PolicyStore PersistentStore -ErrorAction Stop)
+        foreach($rule in $rules){
+            $key=[string]$rule.Name
+            if(!$key -or $seen.ContainsKey($key)){continue}
+            $intent=''
+            if($Kind -eq 'WebView2'){
+                $intent=Get-PCADAutodeskWebViewIntent -Name $key -DisplayName ([string]$rule.DisplayName) -Group ([string]$rule.Group)
+                if(!$intent){continue} # No restaurar bloqueos WebView2 generales ni ajenos.
+            }
+            $seen[$key]=$true
+            $block=([string]$rule.Action -eq 'Block' -and [string]$rule.Enabled -eq 'True')
+            [void]$found.Add([pscustomobject]@{
+                AutodeskIntent=$intent
+                SharedRuntimeRisk=($Kind -eq 'WebView2')
+                RuleName=$key
+                Program=$program
+                DisplayName=[string]$rule.DisplayName
+                Group=[string]$rule.Group
+                Direction=[string]$rule.Direction
+                IsBlocking=$block
+                Kind=$Kind
+                Ownership=if([string]$rule.Group -ceq 'PCAD4_MANAGED'){'POSIBLE_PCAD4'}else{'NO_VERIFICADA'}
+            })
+        }
+    }
+    return @($found.ToArray() | Sort-Object RuleName)
+}
+
+# Regla ajena/historica SOLO con seleccion exacta y confirmacion por el usuario.
+# No hace rollback a ciegas ni toca perfiles/GPO, antivirus, procesos o servicios.
+function Invoke-PCADRestoreSelectedRule {
+    [CmdletBinding()]
+    param(
+        [ValidateSet('AutoCAD','WebView2')][string]$Kind,
+        [Parameter(Mandatory=$true)][string]$RuleName,
+        [Parameter(Mandatory=$true)][string]$RecoveryDirectory,
+        [switch]$Commit
+    )
+    if(!$Commit -or !(Test-PCADAdministrator)){throw 'Restauracion requiere consentimiento y administrador.'}
+    $rules=@(Get-PCADTargetedBlockRules -Kind $Kind | Where-Object {$_.RuleName -ceq $RuleName -and $_.IsBlocking})
+    if($rules.Count -ne 1){throw 'La regla ya no existe, no bloquea, no tiene vinculo Autodesk identificable o su identidad es ambigua.'}
+    $target=$rules[0]
+    if($Kind -eq 'WebView2' -and [string]$target.AutodeskIntent -eq ''){
+        throw 'Una regla WebView2 generica no es elegible para restaurar Autodesk.'
+    }
+    $original=@(Get-NetFirewallRule -Name $RuleName -PolicyStore PersistentStore -ErrorAction Stop)
+    if($original.Count -ne 1 -or [string]$original[0].Action -cne 'Block' -or
+       [string]$original[0].Enabled -cne 'True' -or
+       [string]$original[0].Group -cne $target.Group -or
+       [string]$original[0].DisplayName -cne $target.DisplayName){
+        throw 'Estado cambio al intentar restaurar. No se ha borrado.'
+    }
+    $programFilters=@($original[0] | Get-NetFirewallApplicationFilter -ErrorAction Stop)
+    if($programFilters.Count -ne 1 -or [string]$programFilters[0].Program -ine $target.Program){
+        throw 'Filtro de programa cambio. No se ha borrado.'
+    }
+    $policyBackup=Save-PCADPolicySnapshot -RecoveryDirectory $RecoveryDirectory
+    $journalPath=Join-Path $RecoveryDirectory ('SelectedRestore_'+[guid]::NewGuid().ToString('N')+'.json')
+    $journal=[pscustomobject]@{
+        Schema='PCAD4_SELECTED_RESTORE_1';CreatedAt=(Get-Date).ToString('o');FinishedAt=''
+        Status='PREPARED';Kind=$Kind;RuleName=$RuleName;Program=$target.Program
+        PolicyBackup=$policyBackup;Error=''
+        Note='Regla seleccionada expresamente. Posible procedencia externa, autoria no verificada.'
+    }
+    Write-PCADJournal -Journal $journal -File $journalPath
+    try{
+        # Ultima consulta antes de borrar.
+        $now=@(Get-PCADTargetedBlockRules -Kind $Kind | Where-Object {
+            $_.RuleName -ceq $RuleName -and $_.Program -ieq $target.Program -and
+            $_.DisplayName -ceq $target.DisplayName -and
+            $_.Group -ceq $target.Group -and
+            $_.Direction -ceq $target.Direction -and $_.IsBlocking
+        })
+        if($now.Count -ne 1 -or ($Kind -eq 'WebView2' -and
+            [string]$now[0].AutodeskIntent -cne [string]$target.AutodeskIntent)){
+            throw 'Regla cambio o perdio atribucion historica Autodesk entre revision y confirmacion.'
+        }
+        $journal.Status='REMOVING'
+        Write-PCADJournal -Journal $journal -File $journalPath
+        Remove-NetFirewallRule -Name $RuleName -PolicyStore PersistentStore -ErrorAction Stop
+        if(@(Get-NetFirewallRule -Name $RuleName -PolicyStore PersistentStore -ErrorAction SilentlyContinue).Count -ne 0){
+            throw 'La regla sigue presente tras intentar retirarla.'
+        }
+        $journal.Status='RESTORED'
+    }catch{
+        $journal.Status='REVIEW_REQUIRED'
+        $journal.Error=$_.Exception.GetType().Name
+    }
+    $journal.FinishedAt=(Get-Date).ToString('o')
+    Write-PCADJournal -Journal $journal -File $journalPath
+    return [pscustomobject]@{
+        Status=$journal.Status;RuleName=$RuleName
+        Removed=($journal.Status -eq 'RESTORED');Journal=$journalPath
+        PolicyBackup=$policyBackup;TrafficVerified=$false
+    }
 }

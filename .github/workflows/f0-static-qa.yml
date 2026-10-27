@@ -1,4 +1,4 @@
-name: ParcheCAD 4.2 Windows QA (Firewall + WebView audit)
+name: ParcheCAD 4.3 Windows QA (WPF Dashboard + stable engines)
 on:
   pull_request:
   push:
@@ -48,6 +48,28 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           & .\tests\F17.RealWindows.Integration.ps1
+      - name: WPF 4.3 XAML startup and safety smoke (no desktop interaction)
+        shell: powershell
+        timeout-minutes: 3
+        run: |
+          $ErrorActionPreference='Stop'
+          & "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -ExecutionPolicy Bypass -STA -File .\src\ParcheCAD.Dashboard.ps1 -SelfTest
+          if($LASTEXITCODE -ne 0) { throw "WPF startup SelfTest failed: $LASTEXITCODE" }
+          & "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -ExecutionPolicy Bypass -STA -File .\src\ParcheCAD.Dashboard.ps1 -StateSelfTest
+          if($LASTEXITCODE -ne 0) { throw "WPF Lote B state SelfTest failed: $LASTEXITCODE" }
+      - name: Render WPF 4.3 visual QA snapshot (offscreen, no firewall)
+        shell: powershell
+        timeout-minutes: 3
+        run: |
+          $ErrorActionPreference='Stop'
+          & "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -ExecutionPolicy Bypass -STA -File .\tools\Render-ParcheCADDashboard.ps1
+          if($LASTEXITCODE -ne 0){ throw "WPF render failed" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ParcheCAD_4.3_WPF_VISUAL_QA
+          path: wpf-dashboard-preview-*.png
+          if-no-files-found: error
+          retention-days: 14
       - name: WinForms construction and control safety smoke (no UI interaction)
         shell: powershell
         timeout-minutes: 3
@@ -126,9 +148,9 @@ jobs:
           & .\tools\Build-ParcheCAD.ps1
       - uses: actions/upload-artifact@v4
         with:
-          name: ParcheCAD_4.2_DEV_NOT_RELEASE
+          name: ParcheCAD_4.3_DEV_NOT_RELEASE
           path: |
-            dist/ParcheCAD_4.2_DEV_NO_RELEASE.zip
-            dist/ParcheCAD_4.2_DEV_NO_RELEASE.zip.sha256
+            dist/ParcheCAD_4.3_DEV_NO_RELEASE.zip
+            dist/ParcheCAD_4.3_DEV_NO_RELEASE.zip.sha256
           if-no-files-found: error
           retention-days: 14
