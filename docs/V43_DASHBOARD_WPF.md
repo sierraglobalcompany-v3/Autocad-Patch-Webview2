@@ -144,3 +144,10 @@ Se renombra **Ver reglas → Analizar firewall** y **Auditar → Analizar WebVie
 ### Gate anti-desbloqueador-general
 
 El restaurador WebView2 NO debe admitir reglas por la ruta del ejecutable únicamente. El test Windows real debe crear en la misma ruta una regla histórica explícitamente vinculada a Autodesk y otra genérica. Solo la vinculada puede seleccionarse y retirarse; la genérica permanece intacta. Rechazar además un prefijo SGC con descripción genérica. Mantener dos botones, sin nuevos módulos ni historial obligatorio.
+
+
+### Bloqueo auditado (flujo real, no monitor) — 2026-10-27
+
+Problema UX: el usuario interpretó que «Iniciar monitor» debía bloquear WebView2. Corrección focal WPF: colocar el botón **BLOQUEO AUDITADO AUTOCAD** junto a «Detener y guardar» sin añadir filas en altura normal. Al inicio no está habilitado; se habilita tras `webview-audit.json` completo y sin cambios, cuyo contrato declara `SafeBlockingCandidates=0`. Pulsar inicia una **segunda** verificación AutoCAD con `ParcheCAD.Preview.ps1`, sin usar PID/padre como identidad. Se ofrece `Apply` elevado solo si esquema/ReadOnly/NoFirewallChanges/Status completo/CatalogStatus OK/PlanState sin conflictos/Candidates ≥ 1 y WebView2 excluido. Cualquier error, resultado parcial, falta de candidatos o conflicto impide aplicar. Confirmación indica explícitamente que **solo se bloquean ejecutables AutoCAD, nunca WebView2 compartido**; motor `Reglas.ps1` vuelve a consultar y requiere UAC+APLICAR. El monitor sigue solo lectura, bloqueo general AutoCAD se mantiene independiente y los dos restauradores no cambian.
+
+Pruebas: SelfTest sintético (botón inicialmente deshabilitado; se habilita con audit verificado; cierre lo deshabilita; preview válido vs parcial/conflictivo/WebView2 no excluido). QA render ambas pestañas con tres acciones WebView2, y CI actual sin reglas reales del usuario. Pendiente prueba de Windows interactivo.

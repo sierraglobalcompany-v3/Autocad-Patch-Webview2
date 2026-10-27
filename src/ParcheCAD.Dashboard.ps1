@@ -24,7 +24,7 @@ if($work.Width -gt 0 -and $work.Height -gt 0){
 }
 $names=@('MainWindow','MetricAutoCAD','MetricRules','MetricConflicts',
  'MetricWeb','MetricProbable','MetricsGrid','WorkTabs','DetailsExpander','FirewallCard','WebCard','TopStatus','StatusDot','FirewallHint','MonitorHint',
- 'BtnPreview','BtnApply','BtnRollback','BtnAudit','BtnMonitor','BtnStopMonitor','BtnGenericAutoCAD','BtnWebRestoreInfo',
+ 'BtnPreview','BtnApply','BtnRollback','BtnAudit','BtnMonitor','BtnStopMonitor','BtnAuditedBlock','BtnGenericAutoCAD','BtnWebRestoreInfo',
  'BtnReports','BtnCancel','BtnExit','ActivityText','Elapsed','Progress',
  'TxtFirewall','TxtWeb','TxtMonitor','ResultTabs','ResultTag')
 $ui=@{}
@@ -45,7 +45,7 @@ function PCAD-Layout([double]$WindowWidth) {
 $window.Add_SizeChanged({PCAD-Layout -WindowWidth $window.ActualWidth})
 PCAD-Layout -WindowWidth ([double]$window.Width)
 if($SelfTest){
-    if($ui.BtnStopMonitor.IsEnabled -or $ui.BtnCancel.IsEnabled){throw 'WPF: dangerous initial controls.'}
+    if($ui.BtnStopMonitor.IsEnabled -or $ui.BtnCancel.IsEnabled -or $ui.BtnAuditedBlock.IsEnabled){throw 'WPF: dangerous initial controls.'}
     if($window.Title -notmatch '4.3' -or $ui.BtnPreview.Content.Text -notmatch 'ANALIZAR FIREWALL' -or
        $ui.BtnAudit.Content.Text -notmatch 'ANALIZAR WEBVIEW2'){throw 'WPF: missing dashboard actions.'}
     foreach($w in @(430.0,580.0,780.0,1120.0,1440.0)){
@@ -73,6 +73,8 @@ $script:MonitorStopping=$false
 $script:MonitorStart=Get-Date
 $script:Admin=$null
 $script:AdminStart=Get-Date
+$script:AuditReady=$false
+$script:AuditedApplyPending=$false
 $script:CloseRequested=$false
 $script:CloseQueued=$false
 $script:ShuttingDown=$false
@@ -122,6 +124,7 @@ function PCAD-Refresh {
     $ui.BtnAudit.IsEnabled=(!$busy)
     $ui.BtnApply.IsEnabled=(!$busy)
     $ui.BtnGenericAutoCAD.IsEnabled=(!$busy)
+    $ui.BtnAuditedBlock.IsEnabled=(!$busy -and $null -eq $script:Monitor -and $script:AuditReady)
     $ui.BtnWebRestoreInfo.IsEnabled=(!$busy)
     $ui.BtnRollback.IsEnabled=(!$busy)
     $ui.BtnCancel.IsEnabled=($null -ne $script:Child)
@@ -152,6 +155,7 @@ function PCAD-StartChild([string]$Kind){
     $args='-NoLogo -NoProfile -ExecutionPolicy Bypass -File "{0}" -OutputDirectory "{1}"' -f $file,$dir
     $proc=Start-Process -FilePath $exe -ArgumentList $args -WindowStyle Hidden -RedirectStandardOutput $out -RedirectStandardError $err -PassThru -ErrorAction Stop
     $script:Child=$proc
+    if($Kind -eq 'AUDIT'){$script:AuditReady=$false}
     $script:ChildType=$Kind
     $script:ChildRoot=$dir
     $script:ChildLog=$out
@@ -169,6 +173,20 @@ function PCAD-StartChild([string]$Kind){
         PCAD-Status 'Analizando WebView2: procesos y conexiones, sin cambios en el firewall...' 'CONSULTING'
     }
     PCAD-Refresh
+}
+# Gate puro: no usa PID ni parentesco WebView2 como elegibilidad del firewall.
+# El informe WebView solo habilita la evaluacion; la segunda lectura del plan
+# AutoCAD debe ser completa y vuelve a verificarse en el proceso elevado.
+function Test-PCADAuditedPlan($Data) {
+    if($null -eq $Data){return $false}
+    return ([string]$Data.Schema -ceq 'PCAD_AUTOCAD_PREVIEW_1' -and
+        $Data.ReadOnly -eq $true -and $Data.NoFirewallChanges -eq $true -and
+        $Data.WebView2SharedExcluded -eq $true -and
+        [string]$Data.Status -ceq 'PREVIEW_COMPLETA' -and
+        [string]$Data.CatalogStatus -ceq 'OK' -and
+        [string]$Data.PlanState -ceq 'PLAN_NO_APLICADO' -and
+        [int]$Data.Candidates -ge 1 -and [int]$Data.Candidates -le 900 -and
+        [int]$Data.Conflicts -eq 0)
 }
 function PCAD-CompleteChild {
     $kind=$script:ChildType
@@ -215,11 +233,34 @@ function PCAD-CompleteChild {
             'Bloqueables automáticamente: 0. Runtime compartido protegido.'+[Environment]::NewLine+
             'Relación padre/PID observacional; no verifica aislamiento ni bloqueo de tráfico.'+[Environment]::NewLine+
             ('Informe: '+(Join-Path $root $reportName))
-        PCAD-Status 'WebView2 analizado. Ningún bloqueo aplicado.' 'PREVIEW_OK'
+        $script:AuditReady=$true
+        PCAD-Status 'WebView2 analizado. Si deseas, evalúa bloqueo auditado solo de ejecutables AutoCAD.' 'PREVIEW_OK'
     }else{
         PCAD-Status 'No se pudo verificar la consulta. No se aplicaron reglas.' 'ERROR'
         $msg='Resultado incompleto; ver errores locales en: '+$script:ChildErr
         if($kind -eq 'PREVIEW'){$ui.TxtFirewall.Text=$msg}else{$ui.TxtWeb.Text=$msg}
+    }
+    if($kind -eq 'PREVIEW' -and $script:AuditedApplyPending){
+        $script:AuditedApplyPending=$false
+        $ui.WorkTabs.SelectedIndex=1
+        if(!(Test-PCADAuditedPlan $data)){
+            PCAD-Status 'Bloqueo auditado NO elegible: AutoCAD ausente, plan parcial o conflicto. WebView2 permanece intacto.' 'PARTIAL'
+            $ui.TxtWeb.Text+=''+[Environment]::NewLine+
+                'Bloqueo auditado no autorizado: sin plan AutoCAD completo y libre de conflictos.'
+        }else{
+            $msg=('Evaluacion completada: {0} ejecutables AutoCAD, 0 conflictos.' -f [int]$data.Candidates)+
+                 [Environment]::NewLine+'El analisis WebView2 NO encontro candidatos bloqueables exclusivos: runtime compartido.'+
+                 [Environment]::NewLine+'Este boton SOLO bloquea ejecutables AutoCAD del plan que el motor elevado revalidara.'+
+                 [Environment]::NewLine+'Puede afectar funciones y comprobaciones de licencia. Requiere UAC y escribir APLICAR.'+
+                 [Environment]::NewLine+'¿Deseas continuar con el bloqueo de ejecutables AutoCAD?'
+            if([Windows.MessageBox]::Show($msg,'Bloqueo auditado AutoCAD','YesNo','Warning') -eq 'Yes'){
+                try{PCAD-StartAdmin 'Apply'}catch{
+                    PCAD-Status ('No se pudo iniciar operacion elevada: '+$_.Exception.Message) 'ERROR'
+                }
+            }else{
+                PCAD-Status 'Evaluacion auditada terminada. Bloqueo cancelado; no se modificaron reglas.' 'IDLE'
+            }
+        }
     }
     PCAD-Refresh
 }
@@ -234,6 +275,7 @@ function PCAD-CancelChild {
         }
         $p.Dispose()
         $script:Child=$null;$script:ChildType=''
+        $script:AuditedApplyPending=$false
         PCAD-Status 'Consulta cancelada. No se modificó el firewall.' 'CANCELLED'
     }catch {
         PCAD-Status ('No se pudo detener la consulta: '+$_.Exception.Message) 'ERROR'
@@ -315,6 +357,18 @@ function PCAD-StartAdmin([ValidateSet('Apply','Rollback','RestoreFirewall','Rest
 
 $ui.BtnPreview.Add_Click({try{PCAD-StartChild 'PREVIEW'}catch{[Windows.MessageBox]::Show($_.Exception.Message,'Analizar firewall')|Out-Null}})
 $ui.BtnAudit.Add_Click({try{PCAD-StartChild 'AUDIT'}catch{[Windows.MessageBox]::Show($_.Exception.Message,'WebView2')|Out-Null}})
+$ui.BtnAuditedBlock.Add_Click({
+    if(!$script:AuditReady -or $null -ne $script:Child -or
+       $null -ne $script:Admin -or $null -ne $script:Monitor -or $script:CloseRequested){return}
+    $script:AuditedApplyPending=$true
+    try{
+        PCAD-StartChild 'PREVIEW'
+    }catch{
+        $script:AuditedApplyPending=$false
+        [Windows.MessageBox]::Show('No se pudo evaluar el plan AutoCAD: '+$_.Exception.Message,
+            'Bloqueo auditado')|Out-Null
+    }
+})
 $ui.BtnMonitor.Add_Click({
     $warning='El monitor observa conexiones y procesos; no verifica ausencia absoluta de tráfico. Iniciar ahora?'
     if([Windows.MessageBox]::Show($warning,'Monitor WebView2','YesNo','Information') -eq 'Yes'){
@@ -472,10 +526,25 @@ if($StateSelfTest){
     PCAD-Status 'Prueba exitosa' 'PREVIEW_OK'
     if($ui.Progress.Value -ne 100){throw 'V43 Lote B: estado exitoso sin progreso final'}
     PCAD-Refresh
-    if(!$ui.BtnApply.IsEnabled -or !$ui.BtnRollback.IsEnabled -or !$ui.BtnWebRestoreInfo.IsEnabled -or !$ui.BtnGenericAutoCAD.IsEnabled -or $ui.BtnCancel.IsEnabled){throw 'V43 Lote B: controles de inicio inconsistentes'}
+    if(!$ui.BtnApply.IsEnabled -or !$ui.BtnRollback.IsEnabled -or !$ui.BtnWebRestoreInfo.IsEnabled -or !$ui.BtnGenericAutoCAD.IsEnabled -or $ui.BtnAuditedBlock.IsEnabled -or $ui.BtnCancel.IsEnabled){throw 'V43: controles de inicio inconsistentes'}
+    $script:AuditReady=$true;PCAD-Refresh
+    if(!$ui.BtnAuditedBlock.IsEnabled){throw 'V43: no habilita evaluacion tras auditoria valida'}
     $script:CloseRequested=$true;PCAD-Refresh
-    if($ui.BtnApply.IsEnabled -or $ui.BtnGenericAutoCAD.IsEnabled -or $ui.BtnWebRestoreInfo.IsEnabled -or $ui.BtnPreview.IsEnabled -or $ui.BtnExit.IsEnabled){throw 'V43 Lote B: no bloquea acciones al cerrar'}
+    if($ui.BtnApply.IsEnabled -or $ui.BtnGenericAutoCAD.IsEnabled -or $ui.BtnAuditedBlock.IsEnabled -or $ui.BtnWebRestoreInfo.IsEnabled -or $ui.BtnPreview.IsEnabled -or $ui.BtnExit.IsEnabled){throw 'V43: no bloquea acciones al cerrar'}
+    $script:AuditReady=$false
     $script:CloseRequested=$false
+    $valid=[pscustomobject]@{
+        Schema='PCAD_AUTOCAD_PREVIEW_1';ReadOnly=$true;NoFirewallChanges=$true
+        WebView2SharedExcluded=$true;Status='PREVIEW_COMPLETA';CatalogStatus='OK'
+        PlanState='PLAN_NO_APLICADO';Candidates=2;Conflicts=0
+    }
+    if(!(Test-PCADAuditedPlan $valid)){throw 'V43: rechaza plan sintético elegible'}
+    $valid.Conflicts=1
+    if(Test-PCADAuditedPlan $valid){throw 'V43: acepta plan con conflicto'}
+    $valid.Conflicts=0;$valid.WebView2SharedExcluded=$false
+    if(Test-PCADAuditedPlan $valid){throw 'V43: acepta bloquear WebView2 compartido'}
+    $valid.WebView2SharedExcluded=$true;$valid.Status='PREVIEW_PARCIAL'
+    if(Test-PCADAuditedPlan $valid){throw 'V43: acepta plan parcial'}
     $window.Close()
     Write-Host 'PASS V43 Lote B: 10 estados, contraste ligado a texto, progreso parcial, cierre sin acciones.'
     exit 0

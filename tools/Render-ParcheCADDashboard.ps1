@@ -58,7 +58,10 @@ function Export-PCADSample([int]$Width,[int]$Height,[bool]$Stress=$false){
         }
         $tabs.SelectedIndex=1
         $visual.UpdateLayout()
-        foreach($btn in @($window.FindName('BtnAudit'),$window.FindName('BtnMonitor'),$window.FindName('BtnStopMonitor'),$window.FindName('BtnGenericAutoCAD'),$window.FindName('BtnWebRestoreInfo'))){
+        if($window.FindName('BtnAuditedBlock').IsEnabled){
+            throw 'Compact WPF: audited block must be disabled before WebView2 audit.'
+        }
+        foreach($btn in @($window.FindName('BtnAudit'),$window.FindName('BtnMonitor'),$window.FindName('BtnStopMonitor'),$window.FindName('BtnAuditedBlock'),$window.FindName('BtnGenericAutoCAD'),$window.FindName('BtnWebRestoreInfo'))){
             if($btn.ActualHeight -lt 37){throw ('Invisible WebView action: '+$btn.Name+' width '+$Width)}
         }
         $tabs.SelectedIndex=0

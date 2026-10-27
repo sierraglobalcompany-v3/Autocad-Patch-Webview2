@@ -143,7 +143,7 @@
      <TabItem Header="WebView2" AutomationProperties.Name="Análisis y monitor WebView2">
       <Border x:Name="WebCard" Background="White" Padding="6,10,6,0">
        <StackPanel>
-        <TextBlock Text="Observa procesos y conexiones. No modifica el firewall." Style="{StaticResource Meta}" Margin="0,0,0,9"/>
+        <TextBlock x:Name="MonitorHint" Text="Analizar y monitorizar solo observan (monitor máximo 10 min). No bloquean." Style="{StaticResource Meta}" Margin="0,0,0,9"/>
         <Grid>
          <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="9"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
          <Button x:Name="BtnAudit" Grid.Column="0" Style="{StaticResource Action}" AutomationProperties.Name="Analizar WebView2, solo lectura">
@@ -158,7 +158,9 @@
          <Button x:Name="BtnStopMonitor" Grid.Column="0" Style="{StaticResource Secondary}" IsEnabled="False" AutomationProperties.Name="Detener monitor y guardar">
           <TextBlock Text="DETENER Y GUARDAR" TextWrapping="Wrap" TextAlignment="Center"/>
          </Button>
-         <TextBlock x:Name="MonitorHint" Grid.Column="1" Text="Solo lectura · máximo 10 minutos" Style="{StaticResource Meta}" Margin="12,0,0,0" VerticalAlignment="Center"/>
+         <Button x:Name="BtnAuditedBlock" Grid.Column="1" Style="{StaticResource Secondary}" IsEnabled="False" Margin="9,0,0,0" AutomationProperties.Name="Bloqueo auditado de ejecutables AutoCAD, disponible despues de analizar WebView2">
+          <TextBlock Text="BLOQUEO AUDITADO AUTOCAD" TextWrapping="Wrap" TextAlignment="Center"/>
+         </Button>
         </Grid>
         <Grid Margin="0,9,0,0">
          <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="9"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -169,7 +171,7 @@
           <TextBlock Text="RESTAURAR WEBVIEW2 AUTODESK" TextWrapping="Wrap" TextAlignment="Center"/>
          </Button>
         </Grid>
-        <TextBlock Text="El bloqueo general solo cubre AutoCAD. Restaurar WebView2 examina reglas históricas vinculadas a Autodesk; no elimina bloqueos genéricos." Style="{StaticResource Meta}" Margin="0,6,0,0"/>
+        <TextBlock Text="Auditado = tras analizar, revalida AutoCAD. Nunca bloquea WebView2 compartido. El monitor solo observa." Style="{StaticResource Meta}" Margin="0,6,0,0"/>
        </StackPanel>
       </Border>
      </TabItem>
