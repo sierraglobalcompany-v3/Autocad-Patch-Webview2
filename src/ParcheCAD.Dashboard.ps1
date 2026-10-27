@@ -139,6 +139,11 @@ function PCAD-ReportsDir {
 }
 function PCAD-StartChild([string]$Kind){
     if($null -ne $script:Child -or $null -ne $script:Admin){return}
+    if($Kind -eq 'AUDIT'){
+        $script:AuditReady=$false
+        $ui.MetricWeb.Text='—';$ui.MetricProbable.Text='—'
+        $ui.TxtWeb.Text='Nuevo análisis en curso. Aún no existe un resultado verificado.'
+    }
     $scriptFile=switch($Kind){
         'PREVIEW' {'ParcheCAD.Preview.ps1'}
         'AUDIT' {'ParcheCAD.WebViewAudit.ps1'}
@@ -155,7 +160,6 @@ function PCAD-StartChild([string]$Kind){
     $args='-NoLogo -NoProfile -ExecutionPolicy Bypass -File "{0}" -OutputDirectory "{1}"' -f $file,$dir
     $proc=Start-Process -FilePath $exe -ArgumentList $args -WindowStyle Hidden -RedirectStandardOutput $out -RedirectStandardError $err -PassThru -ErrorAction Stop
     $script:Child=$proc
-    if($Kind -eq 'AUDIT'){$script:AuditReady=$false}
     $script:ChildType=$Kind
     $script:ChildRoot=$dir
     $script:ChildLog=$out
@@ -177,6 +181,32 @@ function PCAD-StartChild([string]$Kind){
 # Gate puro: no usa PID ni parentesco WebView2 como elegibilidad del firewall.
 # El informe WebView solo habilita la evaluacion; la segunda lectura del plan
 # AutoCAD debe ser completa y vuelve a verificarse en el proceso elevado.
+# Validacion estricta de la salida de WebView2 antes de habilitar acciones.
+# Ni un estado inesperado ni datos incoherentes habilitan el siguiente paso.
+function Test-PCADWebAuditComplete($Data) {
+    if($null -eq $Data){return $false}
+    if([string]$Data.Schema -cne 'PCAD_WEBVIEW_AUDIT_1' -or
+       [string]$Data.Status -cne 'AUDITORIA_WEBVIEW_COMPLETADA' -or
+       $Data.ReadOnly -ne $true -or $Data.NoFirewallChanges -ne $true -or
+       $Data.IsolationVerified -ne $false -or
+       $Data.BlockedTrafficVerified -ne $false -or
+       [int]$Data.SafeBlockingCandidates -ne 0){return $false}
+    $rows=@($Data.Entries | Where-Object {$null -ne $_})
+    $count=[int]$Data.TotalWebView2
+    $probable=[int]$Data.ProbableAutoCAD
+    $other=[int]$Data.Indeterminate
+    if($count -lt 0 -or $count -gt 30000 -or
+       $probable -lt 0 -or $other -lt 0 -or
+       $rows.Count -ne $count -or $probable+$other -ne $count){return $false}
+    foreach($row in $rows){
+        if($row.AutomaticFirewallEligible -ne $false -or
+           [string]$row.Runtime -cne 'WEBVIEW2_MICROSOFT_COMPARTIDO' -or
+           [string]$row.Attribution -notin @('AUTOCAD_PROBABLE','COMPARTIDO_O_INDETERMINADO')){
+            return $false
+        }
+    }
+    return $true
+}
 function Test-PCADAuditedPlan($Data) {
     if($null -eq $Data){return $false}
     return ([string]$Data.Schema -ceq 'PCAD_AUTOCAD_PREVIEW_1' -and
@@ -218,14 +248,15 @@ function PCAD-CompleteChild {
             ('Catálogo: '+$data.CatalogStatus)+[Environment]::NewLine+
             'PREVISUALIZACIÓN. Ninguna regla aplicada. WebView2 compartido excluido.'+[Environment]::NewLine+
             ('Informe: '+(Join-Path $root $reportName))
-        if($data.Status -eq 'PREVIEW_COMPLETA'){
+        if($data.Status -eq 'PREVIEW_COMPLETA' -and
+           [string]$data.CatalogStatus -ceq 'OK' -and
+           [string]$data.PlanState -ceq 'PLAN_NO_APLICADO' -and
+           [int]$data.Conflicts -eq 0){
             PCAD-Status 'Análisis de firewall completo. No se modificó el firewall.' 'PREVIEW_OK'
         }else{
             PCAD-Status 'Catálogo AutoCAD parcial. No se aplicó ninguna regla; revisa el informe.' 'PARTIAL'
         }
-    }elseif($kind -eq 'AUDIT' -and $null -ne $data -and
-       $data.Schema -ceq 'PCAD_WEBVIEW_AUDIT_1' -and $data.ReadOnly -eq $true -and
-       $data.NoFirewallChanges -eq $true -and [int]$data.SafeBlockingCandidates -eq 0){
+    }elseif($kind -eq 'AUDIT' -and (Test-PCADWebAuditComplete $data)){
         $ui.MetricWeb.Text=[string]$data.TotalWebView2
         $ui.MetricProbable.Text=[string]$data.ProbableAutoCAD
         $ui.TxtWeb.Text=('WebView2: {0} | AutoCAD probable: {1} | Indeterminados: {2}' -f
@@ -236,6 +267,7 @@ function PCAD-CompleteChild {
         $script:AuditReady=$true
         PCAD-Status 'WebView2 analizado. Si deseas, evalúa bloqueo auditado solo de ejecutables AutoCAD.' 'PREVIEW_OK'
     }else{
+        if($kind -eq 'AUDIT'){$script:AuditReady=$false}
         PCAD-Status 'No se pudo verificar la consulta. No se aplicaron reglas.' 'ERROR'
         $msg='Resultado incompleto; ver errores locales en: '+$script:ChildErr
         if($kind -eq 'PREVIEW'){$ui.TxtFirewall.Text=$msg}else{$ui.TxtWeb.Text=$msg}
@@ -274,6 +306,7 @@ function PCAD-CancelChild {
             if(!$p.WaitForExit(5000)){throw 'El proceso de consulta no finalizó.'}
         }
         $p.Dispose()
+        if($script:ChildType -eq 'AUDIT'){$script:AuditReady=$false}
         $script:Child=$null;$script:ChildType=''
         $script:AuditedApplyPending=$false
         PCAD-Status 'Consulta cancelada. No se modificó el firewall.' 'CANCELLED'
@@ -323,6 +356,9 @@ function PCAD-CompleteMonitor {
         try{$data=Get-Content -LiteralPath $path -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop}catch{}
     }
     if($null -ne $data -and $data.Schema -ceq 'PCAD_MONITOR_1' -and
+       [string]$data.Result -ceq 'MONITOREO_COMPLETADO_OBSERVACIONAL' -and
+       [string]$data.StopReason -in @('USUARIO','DURACION_MAXIMA') -and
+       [int]$data.Samples -ge 0 -and
        $data.ReadOnly -eq $true -and $data.BlockedTrafficVerified -eq $false -and
        $data.WebViewIsolationVerified -eq $false){
         $ui.TxtMonitor.Text=('Muestras: {0} | Eventos: {1} | TCP: {2} | UDP: {3}' -f
@@ -545,8 +581,21 @@ if($StateSelfTest){
     if(Test-PCADAuditedPlan $valid){throw 'V43: acepta bloquear WebView2 compartido'}
     $valid.WebView2SharedExcluded=$true;$valid.Status='PREVIEW_PARCIAL'
     if(Test-PCADAuditedPlan $valid){throw 'V43: acepta plan parcial'}
+    $auditValid=[pscustomobject]@{
+        Schema='PCAD_WEBVIEW_AUDIT_1';Status='AUDITORIA_WEBVIEW_COMPLETADA'
+        ReadOnly=$true;NoFirewallChanges=$true;IsolationVerified=$false
+        BlockedTrafficVerified=$false;SafeBlockingCandidates=0
+        TotalWebView2=0;ProbableAutoCAD=0;Indeterminate=0;Entries=@()
+    }
+    if(!(Test-PCADWebAuditComplete $auditValid)){throw 'AUDIT10: valid empty WebView audit refused'}
+    $auditValid.Status='PARCIAL'
+    if(Test-PCADWebAuditComplete $auditValid){throw 'AUDIT10: partial WebView audit accepted'}
+    $auditValid.Status='AUDITORIA_WEBVIEW_COMPLETADA';$auditValid.TotalWebView2=1
+    if(Test-PCADWebAuditComplete $auditValid){throw 'AUDIT10: WebView audit counts inconsistent'}
+    $auditValid.TotalWebView2=0;$auditValid.SafeBlockingCandidates=1
+    if(Test-PCADWebAuditComplete $auditValid){throw 'AUDIT10: shared WebView2 marked blockable'}
     $window.Close()
-    Write-Host 'PASS V43 Lote B: 10 estados, contraste ligado a texto, progreso parcial, cierre sin acciones.'
+    Write-Host 'PASS V43 external AUDIT10: states, negative WebView audit fixtures, plan gates, close behavior.'
     exit 0
 }
 PCAD-Status 'Listo para consultar AutoCAD y WebView2, sin modificar el firewall.' 'IDLE'

@@ -125,7 +125,7 @@ $preview=PCAD-Button 'VER REGLAS AUTOCAD' 40 468 243 52
 $preview.BackColor=[Drawing.Color]::FromArgb(238,245,255)
 $apply=PCAD-Button 'VERIFICAR Y APLICAR' 322 348 243 53
 $apply.Font=New-Object Drawing.Font('Segoe UI',10,[Drawing.FontStyle]::Bold)
-$rollback=PCAD-Button 'REVERTIR OPERACION PROPIA' 322 408 243 52
+$rollback=PCAD-Button 'RESTAURAR FIREWALL' 322 408 243 52
 $monitorStart=PCAD-Button 'INICIAR MONITOR WEBVIEW2' 604 348 243 53
 $monitorStart.BackColor=[Drawing.Color]::FromArgb(35,67,125)
 $monitorStart.ForeColor=[Drawing.Color]::White
@@ -190,7 +190,9 @@ function PCAD-Busy([bool]$Busy) {
     $script:preview.Enabled=(-not $Busy) -and (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'ParcheCAD.Reglas.ps1') -PathType Leaf)
     $script:apply.Enabled=(-not $Busy) -and ($null -eq $script:AdminProc) -and
         (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'ParcheCAD.Reglas.ps1') -PathType Leaf)
-    $script:rollback.Enabled=(-not $Busy) -and (Test-Path -LiteralPath (Join-Path $script:Reports 'operaciones') -PathType Container)
+    # El restaurador actual examina Windows Firewall, sin necesitar la carpeta vieja.
+    $script:rollback.Enabled=(-not $Busy) -and ($null -eq $script:AdminProc) -and
+        (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'ParcheCAD.Reglas.ps1') -PathType Leaf)
     $script:apply.BackColor=$(if($script:apply.Enabled){[Drawing.Color]::FromArgb(21,138,66)}else{[Drawing.Color]::FromArgb(226,232,240)})
     $script:apply.ForeColor=$(if($script:apply.Enabled){[Drawing.Color]::White}else{[Drawing.Color]::FromArgb(99,110,126)})
     $script:applyHint.Text=$(if($Busy){'Accion no disponible mientras se consulta'}else{'Verifica rutas, conflictos y respaldo antes de bloquear'})
@@ -625,6 +627,7 @@ function PCAD-LaunchAdmin([string]$Mode,[string]$Manifest=''){
     try{
         $args='-NoLogo -NoProfile -ExecutionPolicy Bypass -File "{0}" -Mode {1} -ConfirmChange' -f $engine,$Mode
         if($Mode -eq 'Rollback'){$args+=' -Manifest "'+$Manifest+'"'}
+        if($Mode -eq 'RestoreFirewall'){$args+=' -InteractivePause'}
         $script:AdminProc=Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList $args -Verb RunAs -PassThru -ErrorAction Stop
         PCAD-Busy $true;$cancel.Enabled=$false
         $status.Text='OPERACION ELEVADA: esperando confirmacion en consola.'
@@ -681,18 +684,13 @@ $apply.Add_Click({
     }
 })
 $rollback.Add_Click({
-    $folder=Join-Path $script:Reports 'operaciones'
-    if(!(Test-Path -LiteralPath $folder -PathType Container)){return}
-    $dlg=New-Object Windows.Forms.OpenFileDialog
-    $dlg.InitialDirectory=$folder;$dlg.Filter='Manifiestos ParcheCAD|PCAD4_*.json'
-    if($dlg.ShowDialog() -ne [Windows.Forms.DialogResult]::OK){$dlg.Dispose();return}
-    $file=[IO.Path]::GetFullPath($dlg.FileName);$dlg.Dispose()
-    if([IO.Path]::GetDirectoryName($file) -ine [IO.Path]::GetFullPath($folder) -or
-       [IO.Path]::GetFileName($file) -notmatch '^PCAD4_[a-f0-9]{32}\.json$'){
-        [void][Windows.Forms.MessageBox]::Show('Selecciona un manifiesto de esta instalacion.','ParcheCAD');return
-    }
-    if([Windows.Forms.MessageBox]::Show('Revertir solo reglas nuevas registradas en esta operacion?','Revertir','YesNo','Warning') -eq 'Yes'){
-        PCAD-LaunchAdmin -Mode 'Rollback' -Manifest $file
+    if($null -ne $script:Proc -or $null -ne $script:AdminProc){return}
+    $msg='RESTAURAR FIREWALL: detecta reglas AutoCAD directamente en Windows, incluso sin carpeta o respaldo anterior.'+
+         [Environment]::NewLine+'Solo las reglas ParcheCAD verificadas pueden recuperarse juntas; otras exigen su ID exacto.'+
+         [Environment]::NewLine+'Requiere UAC y confirmacion escrita, con copia de politica previa en ProgramData.'+
+         [Environment]::NewLine+'¿Continuar a la consola de restauracion?'
+    if([Windows.Forms.MessageBox]::Show($msg,'Restaurar Firewall AutoCAD','YesNo','Warning') -eq 'Yes'){
+        PCAD-LaunchAdmin -Mode 'RestoreFirewall'
     }
 })
 $start.Add_Click({if($InteractionSelfTest){PCAD-Begin}else{PCAD-WebViewBegin}})
@@ -914,7 +912,7 @@ if($SelfTest){
         }
     }
     PCAD-Busy $false
-    if(!$apply.Enabled -or !$monitorStart.Enabled -or $monitorStop.Enabled){throw 'V42: no se puede iniciar firewall directo sin auditoria WebView2'}
+    if(!$apply.Enabled -or !$rollback.Enabled -or !$monitorStart.Enabled -or $monitorStop.Enabled){throw 'V43: restauracion sin respaldo no habilitada en interfaz clasica'}
     if(!$form.Controls.Contains($tabs) -or !$diagnosticTab.Controls.Contains($details) -or !$monitorTab.Controls.Contains($monitorDetails)){throw 'V41: diagnostico y monitor no separados'}
     if($form.Text -notmatch '4\.2' -or $start.Text -notmatch 'WEBVIEW2'){throw 'V42: version o flujo WebView2 incorrecto'}
     if(!(Test-Path -LiteralPath $script:PreviewRunner -PathType Leaf)){throw 'Preview background worker no incluido'}

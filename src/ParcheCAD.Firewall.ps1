@@ -438,7 +438,9 @@ function Invoke-PCADRestoreSelectedRule {
         # Ultima consulta antes de borrar.
         $now=@(Get-PCADTargetedBlockRules -Kind $Kind | Where-Object {
             $_.RuleName -ceq $RuleName -and $_.Program -ieq $target.Program -and
-            $_.DisplayName -ceq $target.DisplayName -and $_.IsBlocking
+            $_.DisplayName -ceq $target.DisplayName -and
+            $_.Group -ceq $target.Group -and
+            $_.Direction -ceq $target.Direction -and $_.IsBlocking
         })
         if($now.Count -ne 1 -or ($Kind -eq 'WebView2' -and
             [string]$now[0].AutodeskIntent -cne [string]$target.AutodeskIntent)){
