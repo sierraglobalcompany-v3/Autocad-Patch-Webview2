@@ -3,7 +3,7 @@ Set-StrictMode -Version 2.0
 $ErrorActionPreference='Stop'
 $root=Split-Path -Parent $PSScriptRoot
 $paths=@('ParcheCAD.Core.ps1','ParcheCAD.Catalogo.ps1','ParcheCAD.Network.ps1',
-         'ParcheCAD.Policy.ps1','ParcheCAD.Firewall.ps1','ParcheCAD.Diagnostico.ps1','ParcheCAD.Reglas.ps1','ParcheCAD.Panel.ps1')
+         'ParcheCAD.Policy.ps1','ParcheCAD.Firewall.ps1','ParcheCAD.Historico.ps1','ParcheCAD.Diagnostico.ps1','ParcheCAD.Reglas.ps1','ParcheCAD.Panel.ps1')
 foreach($name in $paths){
     $f=Join-Path (Join-Path $root 'src') $name
     $tokens=$null;$errors=$null
@@ -15,6 +15,7 @@ foreach($name in $paths){
 . (Join-Path $root 'src\ParcheCAD.Network.ps1')
 . (Join-Path $root 'src\ParcheCAD.Policy.ps1')
 . (Join-Path $root 'src\ParcheCAD.Firewall.ps1')
+. (Join-Path $root 'src\ParcheCAD.Historico.ps1')
 function Assert-F34([bool]$Condition,[string]$Label) {
     if(!$Condition){throw ("FAIL: "+$Label)}
 }
@@ -138,11 +139,14 @@ try {
     $id=[guid]::NewGuid().ToString('N')
     $progress=Join-Path $backup ('PCAD_PROGRESS_'+$id+'.json')
     $first=Invoke-PCADApplyPlan -Plan $plan -BackupDirectory $backup -OperationId $id -ProgressFile $progress -Commit
-    Write-Host ('F4 debug apply result: '+($first|ConvertTo-Json -Depth 7 -Compress))
     Assert-F34 ($first.Verified -eq 2 -and $first.Manifest -like ('*PCAD4_'+$id+'.json')) 'F4 journal correlates ID and validates all rules'
     $progressData=Get-Content -LiteralPath $progress -Raw -ErrorAction Stop|ConvertFrom-Json -ErrorAction Stop
     Assert-F34 ($progressData.Stage -eq 'VERIFYING' -and $progressData.Completed -eq 2 -and
         $progressData.Total -eq 2) 'F4 progress persisted and verified before APPLIED'
+    # A transient progress file MUST NOT be mistaken for a recoverable PCAD4 journal.
+    $ready=Assert-PCADRecoveryReady -JournalDirectory $backup
+    Assert-F34 ($ready.Status -eq 'OK' -and $ready.Valid -eq 1 -and
+        $ready.Unverified -eq 0) 'F4 independent progress does not poison the recovery preflight'
     $duplicateRejected=$false
     try{$null=Invoke-PCADApplyPlan -Plan $plan -BackupDirectory $backup -OperationId $id -Commit}
     catch{$duplicateRejected=$true}
