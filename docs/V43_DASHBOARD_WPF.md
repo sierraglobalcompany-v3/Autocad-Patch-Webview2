@@ -115,3 +115,10 @@ CI #151 4/4 PASS acredita XAML load, código empaquetado, integración previa de
 **QA sin duplicaciones:** test F6 comprueba los documentos activos, ausencia de históricos en ZIP, launcher WPF empaquetado con Mark-of-the-Web, estado y seguridad de workers, fallback WinForms y SHA determinista. El renderer WPF añade escenarios de texto largo/cambio de escala tipográfica, aclarando que no sustituye DPI físico. Mantener QA de firewall existente sin repetir suites.
 
 **Retiro definitivo de WinForms:** BLOQUEADO hasta aceptación interactiva WPF en equipo Windows con AutoCAD y reversión autorizada. En un único commit futuro se retirarán launcher clásico, Panel.ps1, UIState.ps1, pruebas exclusivas y referencias de Build/CI/README; no borrar el motor ni pruebas de seguridad.
+
+
+### Lote D — Reorganización compacta solicitada por el usuario
+
+**Causa:** el dashboard A/B/C necesitaba scroll para llegar a las acciones o a los informes, porque dos paneles funcionales, el estado y todos los registros se presentaban simultáneamente. **Decisión KISS:** sin reescribir motores ni introducir pantallas adicionales, concentrar Firewall y WebView2 en dos pestañas de un solo TabControl WPF; mantener métricas siempre arriba, actividad debajo y detalles en un Expander contraído. Ya no mostrar los dos grupos de acciones al mismo tiempo.
+
+**Comportamiento:** los procesos de consulta, auditoría y monitor mantienen sus marcadores e informes; al iniciar una operación el frontend selecciona la pestaña correcta. Los detalles no se abren automáticamente para no forzar desplazamiento. Pantalla nominal 1050×665 DIP sin scroll; en resolución/DPI pequeños se conserva desplazamiento vertical únicamente como medida de accesibilidad. Se reemplaza el render de 7 vistas históricas por **una prueba focal** de seis escenarios (normal, grande, media, pequeña, angosta, estrés de texto), con verificación de botones de ambas pestañas, detalles inicialmente plegados y ausencia de scroll nominal. El fallback WinForms se conserva hasta QA real. Sin cambios en firewall, rollback, conexión o atribución WebView2.

@@ -23,7 +23,7 @@ if($work.Width -gt 0 -and $work.Height -gt 0){
     $window.Height=[Math]::Min($window.Height,$window.MaxHeight)
 }
 $names=@('MainWindow','MetricAutoCAD','MetricRules','MetricConflicts',
- 'MetricWeb','MetricProbable','MetricsGrid','ActionsWrap','FirewallCard','WebCard','TopStatus','StatusDot','FirewallHint','MonitorHint',
+ 'MetricWeb','MetricProbable','MetricsGrid','WorkTabs','DetailsExpander','FirewallCard','WebCard','TopStatus','StatusDot','FirewallHint','MonitorHint',
  'BtnPreview','BtnApply','BtnRollback','BtnAudit','BtnMonitor','BtnStopMonitor',
  'BtnReports','BtnCancel','BtnExit','ActivityText','Elapsed','Progress',
  'TxtFirewall','TxtWeb','TxtMonitor','ResultTabs','ResultTag')
@@ -34,17 +34,13 @@ foreach($name in $names){
     $ui[$name]=$c
 }
 
-# Lote A: solo una funcion para reflujo 4/2/1 y 2/1 en WPF.
-# No escalado manual por DPI: WPF usa unidades independientes de dispositivo.
+# Layout compacto: una tarea visible por pestaña; solo cambian las columnas KPI.
+# WPF adapta filas y botones sin cálculos manuales de tamaño o DPI.
 function PCAD-Layout([double]$WindowWidth) {
-    $usable=[Math]::Max(300.0,($WindowWidth - 72.0))
-    if($usable -ge 1020){$ui.MetricsGrid.Columns=4}
-    elseif($usable -ge 570){$ui.MetricsGrid.Columns=2}
+    $usable=[Math]::Max(280.0,($WindowWidth - 50.0))
+    if($usable -ge 790){$ui.MetricsGrid.Columns=4}
+    elseif($usable -ge 490){$ui.MetricsGrid.Columns=2}
     else {$ui.MetricsGrid.Columns=1}
-    $twoPanels=$usable -ge 880
-    $width=if($twoPanels){[Math]::Floor(($usable-18)/2)}else{[Math]::Floor($usable-16)}
-    $ui.FirewallCard.Width=$width
-    $ui.WebCard.Width=$width
 }
 $window.Add_SizeChanged({PCAD-Layout -WindowWidth $window.ActualWidth})
 PCAD-Layout -WindowWidth ([double]$window.Width)
@@ -54,11 +50,13 @@ if($SelfTest){
        $ui.BtnAudit.Content.Text -notmatch 'WEBVIEW2'){throw 'WPF: missing dashboard actions.'}
     foreach($w in @(430.0,580.0,780.0,1120.0,1440.0)){
         PCAD-Layout -WindowWidth $w
-        $cols=if($w -ge 1092){4}elseif($w -ge 642){2}else{1}
+        $cols=if($w -ge 840){4}elseif($w -ge 540){2}else{1}
         if($ui.MetricsGrid.Columns -ne $cols){throw ('WPF responsive metrics failed at '+$w)}
-        if($ui.FirewallCard.Width -le 0 -or $ui.FirewallCard.Width -ne $ui.WebCard.Width){throw ('WPF responsive cards failed at '+$w)}
+        if($ui.WorkTabs.Items.Count -ne 2 -or $ui.DetailsExpander.IsExpanded){
+            throw ('WPF compact tabs or default details failed at '+$w)
+        }
     }
-    Write-Host ('PASS WPF 4.3: XAML loaded, {0} named controls, responsive 430/580/780/1120/1440 and safety defaults.' -f $names.Count)
+    Write-Host ('PASS WPF 4.3: XAML loaded, {0} named controls, compact tabs, responsive 430/580/780/1120/1440 and safety defaults.' -f $names.Count)
     $window.Close()
     exit 0
 }
@@ -160,9 +158,11 @@ function PCAD-StartChild([string]$Kind){
     $ui.Progress.IsIndeterminate=$true
     $ui.Elapsed.Text='00:00'
         if($Kind -eq 'PREVIEW'){
+        $ui.WorkTabs.SelectedIndex=0
         $ui.ResultTabs.SelectedIndex=0
         PCAD-Status 'Localizando ejecutables AutoCAD y comprobando reglas, sin modificar Windows...' 'CONSULTING'
     }else{
+        $ui.WorkTabs.SelectedIndex=1
         $ui.ResultTabs.SelectedIndex=1
         PCAD-Status 'Auditando WebView2: instantánea observacional y atribución probable...' 'CONSULTING'
     }
@@ -249,6 +249,7 @@ function PCAD-StartMonitor {
     $args='-NoLogo -NoProfile -ExecutionPolicy Bypass -File "{0}" -OutputDirectory "{1}" -DurationSeconds 600 -IntervalMilliseconds 1000' -f $path,$folder
     $p=Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList $args -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru -ErrorAction Stop
     $script:Monitor=$p;$script:MonitorRoot=$folder;$script:MonitorStopping=$false;$script:MonitorStart=Get-Date
+    $ui.WorkTabs.SelectedIndex=1
     $ui.ResultTabs.SelectedIndex=2
     $ui.MonitorHint.Text='Monitor activo · TCP/UDP observacionales · máx. 10 min'
     PCAD-Status 'Monitor activo. Prueba AutoCAD; detén para guardar el informe.' 'MONITORING'
@@ -383,6 +384,7 @@ $timer.Add_Tick({
                 }
                 $ui.TxtFirewall.Text=$notice+[Environment]::NewLine+
                     'Abre informes para revisar el journal de esta operación.'
+                $ui.WorkTabs.SelectedIndex=0
                 $ui.ResultTabs.SelectedIndex=0
                 PCAD-Status $notice $(if($code -eq 0){'ADMIN_DONE'}else{'ERROR'})
                 PCAD-Refresh

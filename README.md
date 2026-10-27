@@ -37,3 +37,8 @@ Las pruebas de CI incluyen PowerShell 5.1/7, paquete reproducible SHA-256, regla
 - `docs/F17_PROTOCOLO_QA_INTEGRADA.md`: protocolo único de aceptación en laboratorio aislado.
 
 Proyecto independiente, no afiliado a Autodesk o Microsoft. No alteres licenciamiento, software ajeno ni reglas de terceros.
+
+
+### Pantalla compacta sin desplazamiento normal
+
+El panel principal usa dos pestañas —**Firewall AutoCAD** y **Analizador WebView2**—; muestra únicamente las acciones de la tarea activa, cuatro métricas, progreso y botones de cierre. Los detalles técnicos permanecen plegados en **Detalles e informes**. A tamaño normal (1050×665 unidades WPF), el diseño busca evitar scroll vertical. En pantallas pequeñas o con escalado de accesibilidad elevado conserva scroll para no ocultar controles. La interfaz no altera los scripts ni las garantías de seguridad.
