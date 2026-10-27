@@ -166,7 +166,7 @@
           <TextBlock Text="BLOQUEO GENERAL AUTOCAD" TextWrapping="Wrap" TextAlignment="Center"/>
          </Button>
          <Button x:Name="BtnWebRestoreInfo" Grid.Column="2" Style="{StaticResource Secondary}" AutomationProperties.Name="Comprobar si WebView2 necesita restauración">
-          <TextBlock Text="RESTAURAR WEBVIEW2 · ESTADO" TextWrapping="Wrap" TextAlignment="Center"/>
+          <TextBlock Text="REVISAR RESTAURACIÓN WEBVIEW2" TextWrapping="Wrap" TextAlignment="Center"/>
          </Button>
         </Grid>
         <TextBlock Text="El bloqueo general afecta solo a ejecutables AutoCAD. WebView2 compartido nunca se bloquea." Style="{StaticResource Meta}" Margin="0,6,0,0"/>

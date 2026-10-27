@@ -343,10 +343,11 @@ $ui.BtnGenericAutoCAD.Add_Click({PCAD-ConfirmAutoCADBlock})
 $ui.BtnWebRestoreInfo.Add_Click({
     # El runtime Microsoft no se modifica por ParcheCAD: nada propio que revertir.
     # No borrar reglas de terceros ni intentar revertirlas por PID.
-    $message='ParcheCAD no crea bloqueos de WebView2 compartido, por lo que no tiene reglas propias de WebView2 para restaurar.'+
-             [Environment]::NewLine+'Ningún cambio se realizó en Windows.'+
-             [Environment]::NewLine+'Para restaurar reglas de AutoCAD que sí haya creado ParcheCAD, usa «Revertir reglas propias» en la pestaña Firewall AutoCAD.'+
-             [Environment]::NewLine+'No se borrarán reglas externas de firewall.'
+    $message='Esta versión no crea reglas sobre el WebView2 compartido. Por tanto, esta opción no tiene cambios de WebView2 que revertir.'+
+             [Environment]::NewLine+'No se modificó Windows desde esta consulta.'+
+             [Environment]::NewLine+'No podemos descartar reglas instaladas por versiones anteriores u otras aplicaciones sin inspeccionarlas.'+
+             [Environment]::NewLine+'Si ParcheCAD creó reglas AutoCAD con un manifiesto válido, utiliza «Revertir reglas propias» en Firewall AutoCAD.'+
+             [Environment]::NewLine+'No se eliminan reglas de terceros ni se restaura el runtime Microsoft.'
     $ui.WorkTabs.SelectedIndex=1
     [Windows.MessageBox]::Show($message,'Estado de restauración WebView2','OK','Information')|Out-Null
 })
