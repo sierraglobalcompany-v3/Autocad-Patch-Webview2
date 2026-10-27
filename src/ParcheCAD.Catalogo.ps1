@@ -39,17 +39,34 @@ function Get-PCADFileClass {
 # One bounded and symlink-safe walker for AutoCAD product and Autodesk shared roots.
 function Get-PCADCatalogTree {
     [CmdletBinding()]
-    param([string]$Root,[int]$MaxFiles=900,[int]$MaxDepth=7)
+    param([string]$Root,[int]$MaxFiles=900,[int]$MaxDepth=7,
+          [ValidateRange(0,3600)][int]$MaxScanSeconds=180,[switch]$ShowProgress)
     $out=New-Object System.Collections.ArrayList
     $warnings=New-Object System.Collections.ArrayList
     $partial=$false
+    if($MaxScanSeconds -eq 0){
+        return [pscustomobject]@{Entries=@();Warnings=@('Tiempo maximo de inspeccion agotado.');Partial=$true}
+    }
+    $clock=[Diagnostics.Stopwatch]::StartNew()
+    $lastMessage=-5.0
+    $folders=0
     if([string]::IsNullOrWhiteSpace($Root) -or !([IO.Path]::IsPathRooted($Root)) -or $Root -match '^\\\\'){
         return [pscustomobject]@{Entries=@();Warnings=@('Raiz no local');Partial=$true}
     }
     $stack=New-Object System.Collections.Stack
     $stack.Push([pscustomobject]@{Path=$Root;Depth=0})
     while($stack.Count -gt 0){
+        if($clock.Elapsed.TotalSeconds -ge $MaxScanSeconds){
+            $partial=$true
+            [void]$warnings.Add('Tiempo limite de lectura del catalogo agotado; NO aplicar reglas con inventario parcial.')
+            break
+        }
         $node=$stack.Pop()
+        $folders++
+        if($ShowProgress -and ($clock.Elapsed.TotalSeconds-$lastMessage) -ge 5){
+            Write-Host ('  Explorando AutoCAD: {0} carpetas, {1} ejecutables encontrados, {2:n0}s. No se han cambiado reglas.' -f $folders,$out.Count,$clock.Elapsed.TotalSeconds)
+            $lastMessage=$clock.Elapsed.TotalSeconds
+        }
         try{
             $dir=Get-Item -LiteralPath $node.Path -Force -ErrorAction Stop
             if(($dir.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){
@@ -78,7 +95,8 @@ function Get-PCADCatalogTree {
             $partial=$true
         }
     }
-    if($partial){[void]$warnings.Add('Inventario limitado por profundidad, cantidad o acceso')}
+    if($ShowProgress){Write-Host ('  Final del recorrido: {0} carpetas, {1} ejecutables, estado {2}, {3:n1}s.' -f $folders,$out.Count,$(if($partial){'PARCIAL'}else{'COMPLETO'}),$clock.Elapsed.TotalSeconds)}
+    if($partial){[void]$warnings.Add('Inventario limitado por tiempo, profundidad, cantidad o acceso')}
     return [pscustomobject]@{Entries=@($out.ToArray());Warnings=@($warnings.ToArray());Partial=$partial}
 }
 function Get-PCADDefaultSharedRoots {
@@ -105,7 +123,8 @@ function Get-PCADExecutableCatalog {
         [AllowNull()][string[]]$SharedRoots=$null,
         [int]$MaxFilesPerSharedRoot=250,
         [int]$MaxSharedDepth=5,
-        [switch]$InternalPaths
+        [switch]$InternalPaths,
+        [switch]$ShowProgress
     )
     $rows=New-Object System.Collections.ArrayList
     $notes=New-Object System.Collections.ArrayList
@@ -125,7 +144,8 @@ function Get-PCADExecutableCatalog {
             if(!([IO.Path]::IsPathRooted($exe)) -or !(Test-Path -LiteralPath $exe -PathType Leaf)) {
                 [void]$notes.Add("AutoCAD ${year}: archivo no disponible");continue
             }
-            $tree=Get-PCADCatalogTree -Root $root -MaxFiles $MaxFilesPerProduct -MaxDepth $MaxDepth
+            if($ShowProgress){Write-Host ('  AutoCAD {0}: inspeccionando carpetas locales; tope 180 segundos por instalacion.' -f $year)}
+            $tree=Get-PCADCatalogTree -Root $root -MaxFiles $MaxFilesPerProduct -MaxDepth $MaxDepth -ShowProgress:$ShowProgress
             foreach($warning in @($tree.Warnings)){
                 [void]$notes.Add(("AutoCAD {0}: {1}" -f $year,$warning))
             }

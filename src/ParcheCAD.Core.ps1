@@ -40,12 +40,15 @@ function Resolve-PCADRegistryInstallDirectory {
 }
 function Get-PCADInstallations {
     [CmdletBinding()]
-    param([switch]$InternalPaths)
+    param([switch]$InternalPaths,[switch]$ShowProgress)
     $candidates=New-Object System.Collections.ArrayList
+    $regCount=0
     foreach ($reg in @(
         'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
         'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
         'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*')) {
+        $regCount++
+        if($ShowProgress){Write-Host ('  Registro {0}/3: revisando instalaciones declaradas...' -f $regCount)}
         foreach ($entry in @(Get-ItemProperty -Path $reg -ErrorAction SilentlyContinue)) {
             $name=Get-PCADProperty $entry 'DisplayName'
             if (!(Test-PCADAutoCADName $name)) { continue }
@@ -58,6 +61,7 @@ function Get-PCADInstallations {
     }
     $roots=@($env:ProgramW6432,$env:ProgramFiles,[Environment]::GetEnvironmentVariable('ProgramFiles(x86)')) |
         Where-Object { $_ } | Select-Object -Unique
+    if($ShowProgress){Write-Host '  Registro examinado; verificando rutas AutoCAD 2023-2027...'}
     foreach ($root in $roots) {
         foreach ($year in 2023..2027) {
             $dir=Join-Path $root ("Autodesk\AutoCAD {0}" -f $year)
@@ -79,6 +83,7 @@ function Get-PCADInstallations {
         $found=[bool]($exe -and (Test-Path -LiteralPath $exe -PathType Leaf))
         $version=''; $publisher=''; $signature='NO_VERIFICADA'
         if ($found) {
+            if($ShowProgress){Write-Host ('  Instalacion AutoCAD {0}: verificando archivo y firma; puede tardar...' -f $c.Year)}
             try {
                 $item=Get-Item -LiteralPath $exe -ErrorAction Stop
                 $version=[string]$item.VersionInfo.FileVersion
@@ -93,6 +98,7 @@ function Get-PCADInstallations {
             FileVersion=$version; Publisher=$publisher; Signature=$signature
         })
     }
+    if($ShowProgress){Write-Host ('  Instalaciones registradas evaluadas: {0}; comprobaciones completadas.' -f $out.Count)}
     return @($out.ToArray() | Sort-Object Year,Path)
 }
 function Get-PCADProcessClass {

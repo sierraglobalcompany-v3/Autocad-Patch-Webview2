@@ -48,6 +48,10 @@ try{
     Assert-PCAD (@($catalog.Entries | Where-Object {$_.Classification -ne 'AUTOCAD_PRODUCTO'}).Count -eq 0) 'fixture only autocad'
     $limited=Get-PCADExecutableCatalog -Installations @([pscustomobject]@{Year=2023;FileFound=$true;Path=(Join-Path $dir 'acad.exe')}) -MaxFilesPerProduct 1
     Assert-PCAD ($limited.Status -eq 'PARCIAL') 'catalog truncation must warn'
+    $budget=Get-PCADCatalogTree -Root $dir -MaxScanSeconds 0
+    Assert-PCAD ($budget.Partial -and @($budget.Entries).Count -eq 0) 'elapsed scan budget must fail-closed'
+    $visible=Get-PCADExecutableCatalog -Installations @([pscustomobject]@{Year=2023;FileFound=$true;Path=(Join-Path $dir 'acad.exe')}) -MaxFilesPerProduct 20 -ShowProgress
+    Assert-PCAD ($visible.Status -eq 'OK' -and @($visible.Entries).Count -eq 2) 'console progress path returns same catalogue'
 } finally {
     if(Test-Path -LiteralPath $temp){Remove-Item -LiteralPath $temp -Recurse -Force}
 }

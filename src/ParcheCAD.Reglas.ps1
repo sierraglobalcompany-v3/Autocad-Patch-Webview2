@@ -18,7 +18,7 @@ $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot 'ParcheCAD.Historico.ps1')
 $root=Split-Path -Parent $PSScriptRoot
 if(!$BackupDirectory){$BackupDirectory=Join-Path $env:ProgramData 'ParcheCAD\Operations'}
-Write-Host 'ParcheCAD 4.0 | Motor de reglas por ruta' -ForegroundColor Cyan
+Write-Host 'ParcheCAD 4.3 | Motor de reglas por ruta' -ForegroundColor Cyan
 Write-Host 'NO controla msedgewebview2.exe compartido ni garantiza ausencia de trafico.'
 try {
     if($Mode -in @('RestoreFirewall','RestoreWebView2')){
@@ -104,14 +104,20 @@ try {
         if($result.Status -ne 'ROLLED_BACK'){exit 2}
         exit 0
     }
-    Write-Host 'Descubriendo instalaciones reales y ejecutables sin modificar Windows...'
-    $inst=@(Get-PCADInstallations -InternalPaths|Where-Object {$_.Year -in $Years -and $_.FileFound})
-    $cat=Get-PCADExecutableCatalog -Installations $inst -SharedRoots @() -InternalPaths
+    Write-Host 'ETAPA 1/3: examinando instalaciones de AutoCAD (registro y firmas), sin cambiar reglas...' -ForegroundColor Cyan
+    $clock=[Diagnostics.Stopwatch]::StartNew()
+    $inst=@(Get-PCADInstallations -InternalPaths -ShowProgress|Where-Object {$_.Year -in $Years -and $_.FileFound})
+    Write-Host ('ETAPA 1/3 TERMINADA: {0} instalacion(es) verificada(s) en {1:n1}s.' -f $inst.Count,$clock.Elapsed.TotalSeconds)
+    Write-Host 'ETAPA 2/3: leyendo carpetas y ejecutables AutoCAD. Puede tardar; limite conservador por instalacion.' -ForegroundColor Cyan
+    $cat=Get-PCADExecutableCatalog -Installations $inst -SharedRoots @() -InternalPaths -ShowProgress
+    Write-Host ('ETAPA 2/3 TERMINADA: {0} entradas, catalogo {1}, tiempo acumulado {2:n1}s.' -f @($cat.Entries).Count,$cat.Status,$clock.Elapsed.TotalSeconds)
+    Write-Host 'ETAPA 3/3: comprobando filtros y reglas actuales. AUN no se aplican cambios.' -ForegroundColor Cyan
     if($cat.Status -ne 'OK'){
         Write-Warning 'Catalogo incompleto; se conserva detalle de advertencias.'
         @($cat.Warnings)|ForEach-Object {Write-Warning $_}
     }
-    $plan=New-PCADRulePlan -Catalog @($cat.Entries) -CheckExisting
+    $plan=New-PCADRulePlan -Catalog @($cat.Entries) -CheckExisting -ShowProgress
+    Write-Host ('ETAPA 3/3 TERMINADA: reglas consultadas, tiempo total {0:n1}s.' -f $clock.Elapsed.TotalSeconds)
     Write-Host ('Versiones detectadas: '+(@($inst|Select-Object -ExpandProperty Year -Unique)-join ', '))
     Write-Host ('Candidatos: {0}, excluidos: {1}, conflictos: {2}' -f $plan.Count,@($plan.Excluded).Count,$plan.Conflicts)
     foreach($item in @($plan.Entries)){
@@ -125,6 +131,7 @@ try {
     if($cat.Status -ne 'OK'){throw 'No aplicar: el inventario de EXE es parcial.'}
     if($plan.Count -eq 0){throw 'No hay ejecutables confirmados para aplicar.'}
     if($plan.Conflicts -gt 0){throw 'No aplicar: existen reglas con conflicto de identidad.'}
+    Write-Host 'PREVALIDACION COMPLETADA. Todavia NO se ha creado ni cambiado ninguna regla.' -ForegroundColor Yellow
     # No crear mas reglas si una operacion previa fue interrumpida o su respaldo no se puede validar.
     $null=Assert-PCADRecoveryReady -JournalDirectory $BackupDirectory
     Write-Warning 'El bloqueo saliente por ruta afecta tambien redes LAN; AutoCAD puede perder funciones o validaciones de suscripcion.'
