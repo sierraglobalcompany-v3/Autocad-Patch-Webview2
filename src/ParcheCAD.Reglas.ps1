@@ -22,7 +22,7 @@ if(!$BackupDirectory){$BackupDirectory=Join-Path $env:ProgramData 'ParcheCAD\Ope
 $progressFile=''
 if($Mode -eq 'Apply' -and $OperationId){
     $null=New-Item -ItemType Directory -Path $BackupDirectory -Force -ErrorAction Stop
-    $progressFile=Join-Path $BackupDirectory ('PCAD4_PROGRESS_'+$OperationId+'.json')
+    $progressFile=Join-Path $BackupDirectory ('PCAD_PROGRESS_'+$OperationId+'.json')
 }
 function PCAD-ReportApplyStage([string]$Step,[int]$Completed=0,[int]$Total=0){
     if($progressFile){Write-PCADApplyProgress -Path $progressFile -Stage $Step -Completed $Completed -Total $Total}

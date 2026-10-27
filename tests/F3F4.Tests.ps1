@@ -136,7 +136,7 @@ try {
         $script:fakeRules.Remove([string]$Name)
     }
     $id=[guid]::NewGuid().ToString('N')
-    $progress=Join-Path $backup ('PCAD4_PROGRESS_'+$id+'.json')
+    $progress=Join-Path $backup ('PCAD_PROGRESS_'+$id+'.json')
     $first=Invoke-PCADApplyPlan -Plan $plan -BackupDirectory $backup -OperationId $id -ProgressFile $progress -Commit
     Write-Host ('F4 debug apply result: '+($first|ConvertTo-Json -Depth 7 -Compress))
     Assert-F34 ($first.Verified -eq 2 -and $first.Manifest -like ('*PCAD4_'+$id+'.json')) 'F4 journal correlates ID and validates all rules'

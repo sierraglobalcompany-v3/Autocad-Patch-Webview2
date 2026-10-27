@@ -478,7 +478,7 @@ function PCAD-StartAdmin([ValidateSet('Apply','Rollback','RestoreFirewall','Rest
     $progress=''
     if($Mode -eq 'Apply'){
         $id=[guid]::NewGuid().ToString('N')
-        $progress=Join-Path (Join-Path $env:ProgramData 'ParcheCAD\Operations') ('PCAD4_PROGRESS_'+$id+'.json')
+        $progress=Join-Path (Join-Path $env:ProgramData 'ParcheCAD\Operations') ('PCAD_PROGRESS_'+$id+'.json')
         $args+=' -OperationId '+$id
     }
     if($Mode -eq 'Rollback'){$args+=' -Manifest "'+$Manifest+'"'}
