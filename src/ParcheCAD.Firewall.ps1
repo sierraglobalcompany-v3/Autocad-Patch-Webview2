@@ -396,7 +396,7 @@ function Invoke-PCADRestoreSelectedRule {
     $policyBackup=Save-PCADPolicySnapshot -RecoveryDirectory $RecoveryDirectory
     $journalPath=Join-Path $RecoveryDirectory ('SelectedRestore_'+[guid]::NewGuid().ToString('N')+'.json')
     $journal=[pscustomobject]@{
-        Schema='PCAD4_SELECTED_RESTORE_1';CreatedAt=(Get-Date).ToString('o')
+        Schema='PCAD4_SELECTED_RESTORE_1';CreatedAt=(Get-Date).ToString('o');FinishedAt=''
         Status='PREPARED';Kind=$Kind;RuleName=$RuleName;Program=$target.Program
         PolicyBackup=$policyBackup;Error=''
         Note='Regla seleccionada expresamente. Posible procedencia externa, autoria no verificada.'
