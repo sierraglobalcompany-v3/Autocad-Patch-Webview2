@@ -18,6 +18,8 @@ $product=Join-Path $testDir 'Autodesk\AutoCAD 2023'
 $exe=Join-Path $product 'acad.exe'
 $manifest=''
 $ruleName=''
+$webRule=''
+$webExe=''
 $hasCleanupError=$false
 try {
     $null=New-Item -ItemType Directory -Path $product -Force -ErrorAction Stop
@@ -76,6 +78,43 @@ try {
     $after=Get-PCADActualRuleStatus -RuleName $ruleName -Program $exe
     if($after.State -ne 'MISSING'){throw 'Regla persiste tras rollback.'}
     Write-Host 'PASS REAL: regla temporal saliente creada, identificada, repetida sin duplicar y revertida tras eliminar EXE.' -ForegroundColor Green
+
+    # Sin carpeta ni backup: ID en firewall + filtros bastan para reconocer
+    # la regla sintética exacta. El diario nuevo persiste aparte.
+    New-NetFirewallRule -Name $ruleName -DisplayName 'ParcheCAD 4.0 - AutoCAD 2023 - acad.exe' -Group 'PCAD4_MANAGED' -Program $exe -Direction Outbound -Action Block -Enabled True -Profile Any -PolicyStore PersistentStore -ErrorAction Stop | Out-Null
+    $allOwned=Get-PCADRecoverableRules
+    if(@($allOwned.Candidates|Where-Object {$_.RuleName -ceq $ruleName}).Count -ne 1){
+        throw 'RECOVERY: regla PCAD4 sin backup no reconocida.'
+    }
+    $restoreDir=Join-Path $testDir 'persistent-recovery'
+    $undoNoBackup=Invoke-PCADRecoverWithoutJournal -RecoveryDirectory $restoreDir -RuleNames @($ruleName) -Commit
+    if($undoNoBackup.Status -cne 'RECOVERED' -or $undoNoBackup.Removed -ne 1 -or
+       !(Test-Path -LiteralPath $undoNoBackup.Journal -PathType Leaf)){
+        throw 'RECOVERY: restauracion AutoCAD sin backup o nuevo journal fallaron.'
+    }
+    $rec=Get-Content -LiteralPath $undoNoBackup.Journal -Raw -ErrorAction Stop|ConvertFrom-Json -ErrorAction Stop
+    if(!(Test-Path -LiteralPath $rec.PolicyBackup -PathType Leaf) -or
+       (Get-PCADActualRuleStatus -RuleName $ruleName -Program $exe).State -cne 'MISSING'){
+        throw 'RECOVERY: no se exporto politica o persistio regla tras restaurar.'
+    }
+
+    # WebView2 compartido: regla sintetica con nombre ajeno, pero filtro real
+    # de ejecutable msedgewebview2.exe. Solo se elimina tras seleccion exacta.
+    $webExe=Join-Path $testDir 'msedgewebview2.exe'
+    Copy-Item -LiteralPath (Join-Path $env:WINDIR 'System32\whoami.exe') -Destination $webExe -ErrorAction Stop
+    $webRule='PCAD_QA_WEB_'+[guid]::NewGuid().ToString('N')
+    New-NetFirewallRule -Name $webRule -DisplayName 'Rule with unrelated display name' -Group 'PCAD_QA_TEST' -Program $webExe -Direction Outbound -Action Block -Enabled True -Profile Any -PolicyStore PersistentStore -ErrorAction Stop|Out-Null
+    $webList=@(Get-PCADTargetedBlockRules -Kind 'WebView2'|Where-Object {$_.RuleName -ceq $webRule})
+    if($webList.Count -ne 1 -or !$webList[0].IsBlocking -or $webList[0].Ownership -cne 'NO_VERIFICADA'){
+        throw 'RECOVERY: el filtro WebView2 con nombre ajeno no fue identificado correctamente.'
+    }
+    $webDone=Invoke-PCADRestoreSelectedRule -Kind WebView2 -RuleName $webRule -RecoveryDirectory $restoreDir -Commit
+    if($webDone.Status -cne 'RESTORED' -or !(Test-Path -LiteralPath $webDone.PolicyBackup) -or
+       $null -ne (Get-NetFirewallRule -Name $webRule -PolicyStore PersistentStore -ErrorAction SilentlyContinue)){
+        throw 'RECOVERY: regla WebView2 exacta no retirada tras backup.'
+    }
+    Write-Host 'PASS F4 RESTORE: AutoCAD PCAD4 sin journal y WebView2 nombre desconocido, copias .wfw, reglas sintéticas retiradas.' -ForegroundColor Green
+
     # Simula una interrupcion despues de que Windows crea la regla, pero
     # antes de registrar CREATED en el journal. No hay procesos ni AV alterados.
     $manifestCrash=Join-Path (Join-Path $testDir 'backups') ('PCAD4_'+[guid]::NewGuid().ToString('N')+'.json')
@@ -108,6 +147,15 @@ try {
     Write-Host 'PASS REAL F10: recuperacion en nuevo proceso tras interrupcion simulada CREATING, sin ejecutable y sin reglas residuales.' -ForegroundColor Green
 
 } finally {
+    if($webRule){
+        $wr=@(Get-NetFirewallRule -Name $webRule -PolicyStore PersistentStore -ErrorAction SilentlyContinue)
+        if($wr.Count -eq 1 -and [string]$wr[0].Group -ceq 'PCAD_QA_TEST'){
+            $wf=@($wr[0]|Get-NetFirewallApplicationFilter -ErrorAction Stop)
+            if($wf.Count -eq 1 -and [string]$wf[0].Program -ieq $webExe){
+                Remove-NetFirewallRule -Name $webRule -PolicyStore PersistentStore -ErrorAction Stop
+            }else{$hasCleanupError=$true}
+        }
+    }
     if($ruleName) {
         $remaining=Get-NetFirewallRule -Name $ruleName -PolicyStore PersistentStore -ErrorAction SilentlyContinue
         if($null -ne $remaining) {

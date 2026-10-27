@@ -123,7 +123,7 @@ function PCAD-Refresh {
     $ui.BtnApply.IsEnabled=(!$busy)
     $ui.BtnGenericAutoCAD.IsEnabled=(!$busy)
     $ui.BtnWebRestoreInfo.IsEnabled=(!$busy)
-    $ui.BtnRollback.IsEnabled=(!$busy -and (Test-Path -LiteralPath (Join-Path $script:Reports 'operaciones') -PathType Container))
+    $ui.BtnRollback.IsEnabled=(!$busy)
     $ui.BtnCancel.IsEnabled=($null -ne $script:Child)
     $ui.BtnMonitor.IsEnabled=(!$busy -and $null -eq $script:Monitor)
     $ui.BtnStopMonitor.IsEnabled=($null -ne $script:Monitor -and !$script:MonitorStopping -and !$script:CloseRequested)
@@ -300,15 +300,16 @@ function PCAD-CompleteMonitor {
         $null=$window.Dispatcher.BeginInvoke([Action]{ $window.Close() })
     }
 }
-function PCAD-StartAdmin([string]$Mode,[string]$Manifest=''){
+function PCAD-StartAdmin([ValidateSet('Apply','Rollback','RestoreFirewall','RestoreWebView2')][string]$Mode,[string]$Manifest=''){
     if($null -ne $script:Child -or $null -ne $script:Admin){return}
     $engine=Join-Path $PSScriptRoot 'ParcheCAD.Reglas.ps1'
     if(!(Test-Path -LiteralPath $engine -PathType Leaf)){throw 'No se encontró motor de reglas.'}
     $args='-NoLogo -NoProfile -ExecutionPolicy Bypass -File "{0}" -Mode {1} -ConfirmChange' -f $engine,$Mode
     if($Mode -eq 'Rollback'){$args+=' -Manifest "'+$Manifest+'"'}
+    if($Mode -in @('RestoreFirewall','RestoreWebView2')){$args+=' -InteractivePause'}
     $proc=Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList $args -Verb RunAs -PassThru -ErrorAction Stop
-    $script:Admin=$proc;$script:AdminStart=Get-Date
-    PCAD-Status 'Operación administrativa en consola. Confirma o cancela allí.' 'ADMIN_WAIT'
+    $script:Admin=$proc;$script:AdminStart=Get-Date;$script:AdminMode=$Mode
+    PCAD-Status 'Analizando reglas del sistema. Confirma cualquier restauracion en la consola elevada.' 'ADMIN_WAIT'
     PCAD-Refresh
 }
 
@@ -341,31 +342,21 @@ function PCAD-ConfirmAutoCADBlock {
 $ui.BtnApply.Add_Click({PCAD-ConfirmAutoCADBlock})
 $ui.BtnGenericAutoCAD.Add_Click({PCAD-ConfirmAutoCADBlock})
 $ui.BtnWebRestoreInfo.Add_Click({
-    # El runtime Microsoft no se modifica por ParcheCAD: nada propio que revertir.
-    # No borrar reglas de terceros ni intentar revertirlas por PID.
-    $message='Esta versión no crea reglas sobre el WebView2 compartido. Por tanto, esta opción no tiene cambios de WebView2 que revertir.'+
-             [Environment]::NewLine+'No se modificó Windows desde esta consulta.'+
-             [Environment]::NewLine+'No podemos descartar reglas instaladas por versiones anteriores u otras aplicaciones sin inspeccionarlas.'+
-             [Environment]::NewLine+'Si ParcheCAD creó reglas AutoCAD con un manifiesto válido, utiliza «Revertir reglas propias» en Firewall AutoCAD.'+
-             [Environment]::NewLine+'No se eliminan reglas de terceros ni se restaura el runtime Microsoft.'
-    $ui.WorkTabs.SelectedIndex=1
-    [Windows.MessageBox]::Show($message,'Estado de restauración WebView2','OK','Information')|Out-Null
+    $msg='RESTAURAR WEBVIEW2: busca bloqueos activos por ruta msedgewebview2.exe en Windows Firewall.'+
+         [Environment]::NewLine+'Muestra todas las coincidencias; NO restaura el runtime ni elimina reglas sin tu seleccion.'+
+         [Environment]::NewLine+'Las reglas pueden pertenecer a terceros; debes confirmar una por su NOMBRE exacto.'+
+         [Environment]::NewLine+'Antes de retirar una regla creara una copia de la politica en ProgramData. Continuar?'
+    if([Windows.MessageBox]::Show($msg,'Restaurar WebView2','YesNo','Warning') -eq 'Yes'){
+        try{PCAD-StartAdmin 'RestoreWebView2'}catch{[Windows.MessageBox]::Show($_.Exception.Message,'Restaurar WebView2')|Out-Null}
+    }
 })
 $ui.BtnRollback.Add_Click({
-    $root=Join-Path $script:Reports 'operaciones'
-    if(!(Test-Path -LiteralPath $root -PathType Container)){return}
-    $dlg=New-Object Microsoft.Win32.OpenFileDialog
-    $dlg.InitialDirectory=$root
-    $dlg.Filter='Manifiestos ParcheCAD|PCAD4_*.json'
-    if(!$dlg.ShowDialog()){return}
-    $file=[IO.Path]::GetFullPath($dlg.FileName)
-    if([IO.Path]::GetDirectoryName($file) -ine [IO.Path]::GetFullPath($root) -or
-       [IO.Path]::GetFileName($file) -notmatch '^PCAD4_[a-f0-9]{32}\.json$'){
-        [Windows.MessageBox]::Show('Selecciona un manifiesto propio válido.','ParcheCAD')|Out-Null
-        return
-    }
-    if([Windows.MessageBox]::Show('Revertir solamente reglas propias de esta operación?','Revertir','YesNo','Warning') -eq 'Yes'){
-        try{PCAD-StartAdmin 'Rollback' $file}catch{[Windows.MessageBox]::Show($_.Exception.Message,'Revertir')|Out-Null}
+    $msg='RESTAURAR FIREWALL: analiza bloqueos activos de ejecutables AutoCAD en Windows Firewall.'+
+         [Environment]::NewLine+'Puede restaurar reglas PCAD4 verificadas aunque borraste la carpeta o los informes.'+
+         [Environment]::NewLine+'Otros bloqueos AutoCAD se muestran y exigen seleccion individual y confirmacion.'+
+         [Environment]::NewLine+'Se guarda una copia independiente en ProgramData antes de cualquier eliminacion. Continuar?'
+    if([Windows.MessageBox]::Show($msg,'Restaurar Firewall AutoCAD','YesNo','Warning') -eq 'Yes'){
+        try{PCAD-StartAdmin 'RestoreFirewall'}catch{[Windows.MessageBox]::Show($_.Exception.Message,'Restaurar Firewall')|Out-Null}
     }
 })
 $ui.BtnExit.Add_Click({$window.Close()})
@@ -395,7 +386,10 @@ $timer.Add_Tick({
             if($p.HasExited){
                 $code=2;try{$code=[int]$p.ExitCode}catch{}
                 $p.Dispose();$script:Admin=$null
-                $notice=if($code -eq 0){
+                $notice=if($script:AdminMode -in @('RestoreFirewall','RestoreWebView2')){
+                    if($code -eq 0){'Restauracion terminada en consola. Verifica reglas, journal y copia en ProgramData.'}
+                    else{'Restauracion cancelada, parcial o fallida; consulta consola y journal. No asumir reparacion.'}
+                }elseif($code -eq 0){
                     'El proceso administrativo terminó (código 0). Aún debes verificar las reglas y el respaldo.'
                 }else{
                     ('Operación no verificada (código '+$code+'). Consulta la consola y el informe; no se presupone bloqueo.')
@@ -477,7 +471,7 @@ if($StateSelfTest){
     PCAD-Status 'Prueba exitosa' 'PREVIEW_OK'
     if($ui.Progress.Value -ne 100){throw 'V43 Lote B: estado exitoso sin progreso final'}
     PCAD-Refresh
-    if(!$ui.BtnApply.IsEnabled -or !$ui.BtnGenericAutoCAD.IsEnabled -or $ui.BtnCancel.IsEnabled){throw 'V43 Lote B: controles de inicio inconsistentes'}
+    if(!$ui.BtnApply.IsEnabled -or !$ui.BtnRollback.IsEnabled -or !$ui.BtnWebRestoreInfo.IsEnabled -or !$ui.BtnGenericAutoCAD.IsEnabled -or $ui.BtnCancel.IsEnabled){throw 'V43 Lote B: controles de inicio inconsistentes'}
     $script:CloseRequested=$true;PCAD-Refresh
     if($ui.BtnApply.IsEnabled -or $ui.BtnGenericAutoCAD.IsEnabled -or $ui.BtnWebRestoreInfo.IsEnabled -or $ui.BtnPreview.IsEnabled -or $ui.BtnExit.IsEnabled){throw 'V43 Lote B: no bloquea acciones al cerrar'}
     $script:CloseRequested=$false

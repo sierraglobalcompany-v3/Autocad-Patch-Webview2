@@ -127,3 +127,16 @@ CI #151 4/4 PASS acredita XAML load, código empaquetado, integración previa de
 ### Cambio de lenguaje y acceso directo solicitado
 
 Se renombra **Ver reglas → Analizar firewall** y **Auditar → Analizar WebView2**. En la pestaña WebView2 se añade un acceso al **Bloqueo general AutoCAD** (mismo controlador y gates existentes, sin inspección WebView2 requerida) y una acción informativa de **estado/restauración WebView2**, puesto que ningún bloqueo de runtime compartido ha sido instalado por ParcheCAD. No se crea un falso bloqueador por PID ni se altera Microsoft WebView2. El acceso explica explícitamente que no modifica el runtime ni restaura reglas externas. Esto conserva una sola función de aplicación, una sola reversión real y una sola fuente de verdad para permisos.
+
+
+## Restauración autosuficiente — una acción por categoría (2026-10-27)
+
+**Exigencia del usuario:** no presentar varios botones «por si acaso». **Solo `RESTAURAR FIREWALL` y `RESTAURAR WEBVIEW2`.** Cada uno primero revisa las reglas actuales del almacén local de Windows Firewall y, dentro de la misma operación, permite recuperar tras consentimiento; no es necesario encontrar una carpeta ParcheCAD o JSON antiguo.
+
+- Firewall: identifica estructura `PCAD4_A_<24hex>_OUT`, `PCAD4_MANAGED`, ruta EXE original, año AutoCAD y filtros completos. Reglas ajenas de AutoCAD pueden recuperarse solo mediante selección por nombre exacto; nunca eliminarlas en lote.
+- WebView2: busca filtro de programa cuyo archivo sea `msedgewebview2.exe`, incluso sin la palabra WebView2 en la regla. Un bloqueo afecta todas las aplicaciones que compartan el runtime; solo se permite retirar una regla exacta tras información y confirmación manual.
+- Antes de quitar: `netsh advfirewall export` a `%ProgramData%\ParcheCAD\Recovery\PolicyBeforeRestore_*.wfw`, journal atómico y nueva verificación de estado. No se importa automáticamente la exportación, porque reemplazaría otras reglas del equipo.
+- Los respaldos nuevos de Apply se escriben en `%ProgramData%\ParcheCAD\Operations`, sobreviven a borrar la carpeta de instalación. El navegador de informes puede permanecer local.
+- Fuera de alcance: GPO, cambios de antivirus, servicios Windows, hosts, reglas sin programa verificable y restauración física del runtime Microsoft. Marcar esas causas como «NO VERIFICADAS», no fingir restauración total.
+
+**QA:** reglas sintéticas de AutoCAD y WebView2 exclusivamente en runner Windows efímero; probar reglas PCAD4 huérfanas, identidad de grupo ajena, exportación antes de eliminación, selección por nombre y desaparición verificada. Motor existente de Apply y recuperación normal sin reescritura.
