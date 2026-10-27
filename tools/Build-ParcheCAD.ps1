@@ -1,4 +1,5 @@
-# Build curated DEVELOPMENT ZIP; no publishing or installing software.
+# Curated KISS development ZIP: current docs and executable modules only.
+# Historical evidence remains in Git; never ship old stage reports as runtime assets.
 [CmdletBinding()]
 param([string]$OutputDirectory='')
 Set-StrictMode -Version 2.0
@@ -9,7 +10,6 @@ $items=@(
     'Abrir_ParcheCAD.cmd',
     'Abrir_ParcheCAD_Clasico.cmd',
     'README.md',
-    'PROJECT_CONTINUITY_CURRENT.md',
     'src/ParcheCAD.Core.ps1',
     'src/ParcheCAD.Catalogo.ps1',
     'src/ParcheCAD.Historico.ps1',
@@ -29,27 +29,9 @@ $items=@(
     'src/ParcheCAD.Dashboard.xaml',
     'src/ParcheCAD.UIState.ps1',
     'docs/SPEC_MAESTRA.md',
-    'docs/F0_GUIA_USO_Y_QA.md',
-    'docs/F1F2_IMPLEMENTACION_QA.md',
-    'docs/F3F4_IMPLEMENTACION_QA.md',
-    'docs/F4_INTERFAZ_QA_REAL.md',
-    'docs/F5_INTEGRACION_RECUPERACION_QA.md',
-    'docs/F6_PAQUETE_PRE_RC.md',
-    'docs/F7_FAILCLOSED_GUI_QA.md',
-    'docs/F8_UISTATE_QA.md',
-    'docs/F9_WINFORMS_EVENT_QA.md',
-    'docs/F10_PROCESOS_RECUPERACION_QA.md',
-    'docs/F11_MATRIZ_COBERTURA_WEBVIEW2.md',
-    'docs/F12_GATE_RC1_QA_INTEGRADA.md',
-    'docs/F13_PRUEBA_EGRESO_TCP_REAL.md',
-    'docs/F14_INVENTARIO_COMPARTIDO_QA.md',
-    'docs/F15_REPARSE_GUARD_QA.md',
-    'docs/F16_INTEGRIDAD_FILTROS_FIREWALL.md',
     'tools/Invoke-ParcheCADRC12.ps1',
     'tools/Invoke-ParcheCADF17.ps1',
     'docs/F17_PROTOCOLO_QA_INTEGRADA.md',
-    'docs/V41_CAMBIOS_AUDITORIA.md',
-    'docs/V42_ARQUITECTURA_QA.md',
     'docs/V43_DASHBOARD_WPF.md'
 ) | Sort-Object
 foreach($name in $items){

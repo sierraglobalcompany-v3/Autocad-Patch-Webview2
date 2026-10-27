@@ -104,3 +104,14 @@ CI #151 4/4 PASS acredita XAML load, código empaquetado, integración previa de
 
 ## Prioridad operativa inmediata
 **SIGUIENTE: CHATGPT (no Codex):** ejecutar Lote C con validación focal e inventario de ruido tras el Lote B; no retirar la UI clásica sin aceptación interactiva en Windows del usuario.
+
+
+## Lote C — consolidación de ruido en el artefacto (2026-10-26)
+
+**Hallazgo real:** el ZIP de desarrollo incluía 19 archivos de reportes y documentación de versiones históricas, además de la guía de continuidad antigua. Esto no hace funcionar el software ni ayuda al usuario. El código fuente y la trazabilidad NO se eliminan del repositorio.
+
+**Decisión KISS:** el ZIP de instalación técnica contiene un README actual, SPEC maestra, guía QA vigente V43 y protocolo F17; motores y scripts de recuperación completos, launcher WPF y respaldo WinForms. Las 19 fuentes documentales antiguas siguen en Git para auditoría, pero ya no se distribuyen en el paquete. No se añade un sistema de migración de documentos ni otra app.
+
+**QA sin duplicaciones:** test F6 comprueba los documentos activos, ausencia de históricos en ZIP, launcher WPF empaquetado con Mark-of-the-Web, estado y seguridad de workers, fallback WinForms y SHA determinista. El renderer WPF añade escenarios de texto largo/cambio de escala tipográfica, aclarando que no sustituye DPI físico. Mantener QA de firewall existente sin repetir suites.
+
+**Retiro definitivo de WinForms:** BLOQUEADO hasta aceptación interactiva WPF en equipo Windows con AutoCAD y reversión autorizada. En un único commit futuro se retirarán launcher clásico, Panel.ps1, UIState.ps1, pruebas exclusivas y referencias de Build/CI/README; no borrar el motor ni pruebas de seguridad.

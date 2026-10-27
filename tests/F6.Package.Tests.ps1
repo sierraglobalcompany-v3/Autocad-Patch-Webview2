@@ -19,7 +19,7 @@ try {
     Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction Stop
     [IO.Compression.ZipFile]::ExtractToDirectory($p1,$unpacked)
     $manifest=Get-Content -LiteralPath (Join-Path $unpacked 'SHA256SUMS.txt') -ErrorAction Stop
-    if(@($manifest).Count -lt 16){throw 'Package manifest incomplete'}
+    if(@($manifest).Count -lt 20){throw 'Package manifest incomplete'}
     $verified=0
     foreach($line in $manifest){
         $m=[regex]::Match($line,'^([a-f0-9]{64})  ([A-Za-z0-9_./-]+)$')
@@ -32,6 +32,20 @@ try {
             throw 'Packaged-file SHA256 mismatch'
         }
         $verified++
+    }
+    # Runtime packages must not reproduce archival stage reports or continuity noise.
+    foreach($outdated in @('PROJECT_CONTINUITY_CURRENT.md','docs/V41_CAMBIOS_AUDITORIA.md',
+                          'docs/V42_ARQUITECTURA_QA.md','docs/F0_GUIA_USO_Y_QA.md',
+                          'docs/F9_WINFORMS_EVENT_QA.md')){
+        if(Test-Path -LiteralPath (Join-Path $unpacked $outdated)){
+            throw ('Lote C: outdated document leaked into development ZIP: '+$outdated)
+        }
+    }
+    foreach($required in @('README.md','docs/SPEC_MAESTRA.md','docs/V43_DASHBOARD_WPF.md',
+                           'docs/F17_PROTOCOLO_QA_INTEGRADA.md','Abrir_ParcheCAD_Clasico.cmd')){
+        if(!(Test-Path -LiteralPath (Join-Path $unpacked $required) -PathType Leaf)){
+            throw ('Lote C: missing current documentation/fallback: '+$required)
+        }
     }
     if(@(Get-ChildItem -LiteralPath $unpacked -Recurse -File | Where-Object {$_.FullName -match '(?i)\\informes\\|\\\.git\\|password|secret|credential'}).Count -ne 0){
         throw 'Forbidden sensitive path in package'
@@ -128,7 +142,9 @@ try {
     Push-Location $unpacked
     try{
         & $env:ComSpec /d /c 'Abrir_ParcheCAD.cmd --selftest'
-        if($LASTEXITCODE -ne 0){throw 'V41: el paquete descargado marcado falla GUI SelfTest.'}
+        if($LASTEXITCODE -ne 0){throw 'WPF packaged GUI SelfTest with MOTW failed.'}
+        & $exe -NoLogo -NoProfile -STA -ExecutionPolicy Bypass -File (Join-Path $unpacked 'src\ParcheCAD.Dashboard.ps1') -StateSelfTest
+        if($LASTEXITCODE -ne 0){throw 'WPF packaged StateSelfTest with MOTW failed.'}
     }finally{Pop-Location}
     # V42: auditar WebView2 desde el paquete extraido, sin instalar AutoCAD ni reglas.
     $auditDir=Join-Path $tmp 'WEBVIEW-PACKAGED'
@@ -157,7 +173,7 @@ try {
     }
     $stage=Get-Content -LiteralPath (Join-Path $previewDir 'preview.fase.txt') -Raw
     if($stage -notmatch '3/3'){throw 'F42: preview did not report phase completion.'}
-    Write-Host ('PASS F6 package: deterministic SHA256, {0} files, extracted CLI, WinForms and F17 evidence' -f $verified) -ForegroundColor Green
+    Write-Host ('PASS F6 package: SHA256, {0} current files, WPF/WinForms fallback, preview/WebView2 and recovery' -f $verified) -ForegroundColor Green
 } finally {
     if(Test-Path -LiteralPath $tmp -PathType Container){Remove-Item -LiteralPath $tmp -Recurse -Force}
 }
