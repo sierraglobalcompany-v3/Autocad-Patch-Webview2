@@ -94,5 +94,13 @@ CI #151 4/4 PASS acredita XAML load, código empaquetado, integración previa de
 - **Permisos:** Apply/Rollback solo con UAC y confirmaciones existentes. Verificación de funcionamiento real, recuperación, suscripción/licencia y tráfico sigue pendiente.
 - **No más capas:** si una mejora requiere un framework, antes demostrar por qué no cabe en WPF/XAML + las funciones actuales.
 
+## Lote B — Ejecución y auditoría focal (2026-10-26)
+
+**Causa raíz en WPF:** `PCAD-Status` actualizaba solo texto (no color del estado); `PCAD-CompleteChild` llevaba la barra al 100 % incluso para informes parciales; el cierre con monitor activo cancelaba el cierre pero exigía otro clic al finalizar.
+
+**Corrección (solo Dashboard.ps1):** presentación de 10 estados reconocidos en una única función `PCAD-Status`, que sincroniza badge, indicador circular, pestaña de resultados y colores; porcentaje 100 solo tras una vista previa o auditoría comprobada, cero cuando parcial/error/cancelado. Al pulsar salir con monitor activo se anota intención, se solicita parada cooperativa (reintento si el worker aún crea su carpeta) y al terminar y recoger el log se cierra automáticamente sin matar AutoCAD. Durante el cierre se deshabilitan nuevas acciones. Si hay operación elevada activa no se cierra y se informa que todavía no terminó. Un proceso administrativo con código 0 **no** certifica bloqueo; exige verificar journal y reglas, código distinto de cero indica error.
+
+**Gate automatizado:** `-StateSelfTest` recorre diez estados visuales sin abrir escritorio, verifica color/texto/result-tag/progreso y bloqueos de controles en cierre. Conservar el QA existente de PowerShell, monitor/paquete/firewall; pruebas de cierre real interactivo siguen pendientes en equipo del usuario. Ningún cambio en módulos de reglas, políticas, WebView2 o monitor.
+
 ## Prioridad operativa inmediata
-**SIGUIENTE: CHATGPT (no Codex):** ejecutar Lote A directamente sobre la rama Draft de PR #22; verificar visualmente antes de Lote B. No solicitar al usuario que pruebe otra versión hasta que el nuevo paquete supere el gate estático y visual focal.
+**SIGUIENTE: CHATGPT (no Codex):** ejecutar Lote C con validación focal e inventario de ruido tras el Lote B; no retirar la UI clásica sin aceptación interactiva en Windows del usuario.

@@ -1,7 +1,7 @@
 ﻿# ParcheCAD 4.3 - WPF frontend only. CLI firewall/audit/monitor engines unchanged.
 #Requires -Version 5.1
 [CmdletBinding()]
-param([switch]$SelfTest)
+param([switch]$SelfTest,[switch]$StateSelfTest)
 Set-StrictMode -Version 2.0
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName PresentationFramework,PresentationCore,WindowsBase -ErrorAction Stop
@@ -75,7 +75,8 @@ $script:MonitorStopping=$false
 $script:MonitorStart=Get-Date
 $script:Admin=$null
 $script:AdminStart=Get-Date
-$script:Working=$false
+$script:CloseRequested=$false
+$script:CloseQueued=$false
 $script:ShuttingDown=$false
 
 function PCAD-Read([string]$File){
@@ -84,19 +85,49 @@ function PCAD-Read([string]$File){
     }
     return ''
 }
-function PCAD-Status([string]$Text,[string]$Badge='SOLO LECTURA'){
+# Una unica representacion visual de los estados; no altera los gates del motor.
+function PCAD-Status {
+    param([string]$Text,
+        [ValidateSet('IDLE','CONSULTING','PREVIEW_OK','PARTIAL','ERROR',
+                     'MONITORING','MONITOR_STOPPING','ADMIN_WAIT','ADMIN_DONE','CANCELLED')]
+        [string]$State='IDLE')
+    $visual=switch($State){
+        'IDLE'             {@('LISTO · SIN CAMBIOS','#0C7140')}
+        'CONSULTING'       {@('CONSULTANDO','#195CB5')}
+        'PREVIEW_OK'       {@('VISTA PREVIA LISTA','#0C7140')}
+        'PARTIAL'          {@('RESULTADO PARCIAL','#995F08')}
+        'ERROR'            {@('ERROR · VER INFORME','#A22D34')}
+        'MONITORING'       {@('MONITOR ACTIVO','#195CB5')}
+        'MONITOR_STOPPING' {@('GUARDANDO REGISTRO','#995F08')}
+        'ADMIN_WAIT'       {@('CONFIRMACIÓN PENDIENTE','#995F08')}
+        'ADMIN_DONE'       {@('TERMINÓ · SIN VERIFICAR','#995F08')}
+        'CANCELLED'        {@('CONSULTA CANCELADA','#52657E')}
+    }
+    $brush=[Windows.Media.BrushConverter]::new().ConvertFromString([string]$visual[1])
     $ui.ActivityText.Text=$Text
-    $ui.TopStatus.Text=$Badge
+    $ui.TopStatus.Text=[string]$visual[0]
+    $ui.TopStatus.Foreground=$brush
+    $ui.StatusDot.Fill=$brush
+    $ui.ResultTag.Text=[string]$visual[0]
+    $ui.ResultTag.Foreground=$brush
+    if($State -in @('ERROR','PARTIAL','CANCELLED')){
+        $ui.Progress.IsIndeterminate=$false
+        $ui.Progress.Value=0
+    }elseif($State -eq 'PREVIEW_OK'){
+        $ui.Progress.IsIndeterminate=$false
+        $ui.Progress.Value=100
+    }
 }
 function PCAD-Refresh {
-    $busy=($null -ne $script:Child -or $null -ne $script:Admin)
+    $busy=($script:CloseRequested -or $null -ne $script:Child -or $null -ne $script:Admin)
     $ui.BtnPreview.IsEnabled=(!$busy)
     $ui.BtnAudit.IsEnabled=(!$busy)
     $ui.BtnApply.IsEnabled=(!$busy)
     $ui.BtnRollback.IsEnabled=(!$busy -and (Test-Path -LiteralPath (Join-Path $script:Reports 'operaciones') -PathType Container))
     $ui.BtnCancel.IsEnabled=($null -ne $script:Child)
     $ui.BtnMonitor.IsEnabled=(!$busy -and $null -eq $script:Monitor)
-    $ui.BtnStopMonitor.IsEnabled=($null -ne $script:Monitor -and !$script:MonitorStopping)
+    $ui.BtnStopMonitor.IsEnabled=($null -ne $script:Monitor -and !$script:MonitorStopping -and !$script:CloseRequested)
+    $ui.BtnExit.IsEnabled=(!$script:CloseRequested)
 }
 function PCAD-ReportsDir {
     if(!(Test-Path -LiteralPath $script:Reports -PathType Container)){
@@ -128,13 +159,12 @@ function PCAD-StartChild([string]$Kind){
     $script:ChildStart=Get-Date
     $ui.Progress.IsIndeterminate=$true
     $ui.Elapsed.Text='00:00'
-    $ui.ResultTag.Text='TRABAJANDO'
-    if($Kind -eq 'PREVIEW'){
+        if($Kind -eq 'PREVIEW'){
         $ui.ResultTabs.SelectedIndex=0
-        PCAD-Status 'Localizando ejecutables AutoCAD y comprobando reglas, sin modificar Windows...' 'CONSULTA ACTIVA'
+        PCAD-Status 'Localizando ejecutables AutoCAD y comprobando reglas, sin modificar Windows...' 'CONSULTING'
     }else{
         $ui.ResultTabs.SelectedIndex=1
-        PCAD-Status 'Auditando WebView2: instantánea observacional y atribución probable...' 'CONSULTA ACTIVA'
+        PCAD-Status 'Auditando WebView2: instantánea observacional y atribución probable...' 'CONSULTING'
     }
     PCAD-Refresh
 }
@@ -154,7 +184,7 @@ function PCAD-CompleteChild {
         try{$data=Get-Content -LiteralPath (Join-Path $root $reportName) -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop}catch{}
     }
     $ui.Progress.IsIndeterminate=$false
-    $ui.Progress.Value=100
+    $ui.Progress.Value=0
     if($kind -eq 'PREVIEW' -and $null -ne $data -and
        $data.Schema -ceq 'PCAD_AUTOCAD_PREVIEW_1' -and $data.ReadOnly -eq $true -and
        $data.NoFirewallChanges -eq $true -and $data.WebView2SharedExcluded -eq $true -and
@@ -168,8 +198,11 @@ function PCAD-CompleteChild {
             ('Catálogo: '+$data.CatalogStatus)+[Environment]::NewLine+
             'PREVISUALIZACIÓN. Ninguna regla aplicada. WebView2 compartido excluido.'+[Environment]::NewLine+
             ('Informe: '+(Join-Path $root $reportName))
-        $ui.ResultTag.Text=if($data.Status -eq 'PREVIEW_COMPLETA'){'CONSULTA CORRECTA'}else{'CATÁLOGO PARCIAL'}
-        PCAD-Status 'Reglas AutoCAD consultadas. No se modificó el firewall.' 'SIN CAMBIOS'
+        if($data.Status -eq 'PREVIEW_COMPLETA'){
+            PCAD-Status 'Reglas AutoCAD consultadas. No se modificó el firewall.' 'PREVIEW_OK'
+        }else{
+            PCAD-Status 'Catálogo AutoCAD parcial. No se aplicó ninguna regla; revisa el informe.' 'PARTIAL'
+        }
     }elseif($kind -eq 'AUDIT' -and $null -ne $data -and
        $data.Schema -ceq 'PCAD_WEBVIEW_AUDIT_1' -and $data.ReadOnly -eq $true -and
        $data.NoFirewallChanges -eq $true -and [int]$data.SafeBlockingCandidates -eq 0){
@@ -180,12 +213,9 @@ function PCAD-CompleteChild {
             'Bloqueables automáticamente: 0. Runtime compartido protegido.'+[Environment]::NewLine+
             'Relación padre/PID observacional; no verifica aislamiento ni bloqueo de tráfico.'+[Environment]::NewLine+
             ('Informe: '+(Join-Path $root $reportName))
-        $ui.ResultTag.Text='AUDITORÍA COMPLETA'
-        PCAD-Status 'WebView2 auditado. Ningún bloqueo aplicado.' 'SOLO LECTURA'
+        PCAD-Status 'WebView2 auditado. Ningún bloqueo aplicado.' 'PREVIEW_OK'
     }else{
-        $ui.Progress.Value=0
-        $ui.ResultTag.Text='CONSULTA INCOMPLETA'
-        PCAD-Status 'No se pudo verificar la consulta. No se aplicaron reglas.' 'REVISAR INFORME'
+        PCAD-Status 'No se pudo verificar la consulta. No se aplicaron reglas.' 'ERROR'
         $msg='Resultado incompleto; ver errores locales en: '+$script:ChildErr
         if($kind -eq 'PREVIEW'){$ui.TxtFirewall.Text=$msg}else{$ui.TxtWeb.Text=$msg}
     }
@@ -202,9 +232,7 @@ function PCAD-CancelChild {
         }
         $p.Dispose()
         $script:Child=$null;$script:ChildType=''
-        $ui.Progress.IsIndeterminate=$false;$ui.Progress.Value=0
-        $ui.ResultTag.Text='CANCELADA'
-        PCAD-Status 'Consulta cancelada. No se modificó el firewall.' 'SIN CAMBIOS'
+        PCAD-Status 'Consulta cancelada. No se modificó el firewall.' 'CANCELLED'
     }catch {
         PCAD-Status ('No se pudo detener la consulta: '+$_.Exception.Message) 'ERROR'
     }
@@ -223,18 +251,18 @@ function PCAD-StartMonitor {
     $script:Monitor=$p;$script:MonitorRoot=$folder;$script:MonitorStopping=$false;$script:MonitorStart=Get-Date
     $ui.ResultTabs.SelectedIndex=2
     $ui.MonitorHint.Text='Monitor activo · TCP/UDP observacionales · máx. 10 min'
-    PCAD-Status 'Monitor activo. Prueba AutoCAD; detén para guardar el informe.' 'MONITOR ACTIVO'
+    PCAD-Status 'Monitor activo. Prueba AutoCAD; detén para guardar el informe.' 'MONITORING'
     PCAD-Refresh
 }
 function PCAD-StopMonitor {
     if($null -eq $script:Monitor -or $script:MonitorStopping){return}
     if(!(Test-Path -LiteralPath $script:MonitorRoot -PathType Container)){
-        PCAD-Status 'Monitor iniciando. Reintenta detener cuando exista la sesión.' 'MONITOR ACTIVO'
+        PCAD-Status 'Monitor iniciando. Se solicitará detener al crearse la sesión.' 'MONITOR_STOPPING'
         return
     }
     [IO.File]::WriteAllText((Join-Path $script:MonitorRoot 'detener.solicitud'),'stop',([Text.UTF8Encoding]::new($false)))
     $script:MonitorStopping=$true
-    PCAD-Status 'Deteniendo monitor de forma segura y guardando el registro...' 'MONITOR ACTIVO'
+    PCAD-Status 'Deteniendo monitor de forma segura y guardando el registro...' 'MONITOR_STOPPING'
     PCAD-Refresh
 }
 function PCAD-CompleteMonitor {
@@ -256,12 +284,18 @@ function PCAD-CompleteMonitor {
             $data.Samples,@($data.Events).Count,$data.ConnectionEventsTcp,$data.UdpEndpointsObserved)+[Environment]::NewLine+
             'Observación probable; ninguna ausencia de tráfico certificada.'+[Environment]::NewLine+('Informe: '+$path)
         $ui.MonitorHint.Text='Monitor finalizado · informe guardado'
-        PCAD-Status 'Monitor finalizado y registro guardado. No certifica bloqueo.' 'SOLO LECTURA'
+        PCAD-Status 'Monitor finalizado y registro guardado. No certifica bloqueo.' 'IDLE'
     }else{
         $ui.TxtMonitor.Text='Monitor parcial. Revisar archivos de informe; no se certifica ausencia de conexiones.'
-        PCAD-Status 'Monitor terminó con resultado parcial o error.' 'REVISAR INFORME'
+        PCAD-Status 'Monitor terminó con resultado parcial o error.' 'PARTIAL'
     }
     PCAD-Refresh
+    if($script:CloseRequested -and $null -eq $script:Monitor -and
+       $null -eq $script:Admin -and !$script:CloseQueued){
+        $script:CloseQueued=$true
+        # No invocar Close dentro de Closing/Tick antes de soltar el handle.
+        $null=$window.Dispatcher.BeginInvoke([Action]{ $window.Close() })
+    }
 }
 function PCAD-StartAdmin([string]$Mode,[string]$Manifest=''){
     if($null -ne $script:Child -or $null -ne $script:Admin){return}
@@ -271,8 +305,7 @@ function PCAD-StartAdmin([string]$Mode,[string]$Manifest=''){
     if($Mode -eq 'Rollback'){$args+=' -Manifest "'+$Manifest+'"'}
     $proc=Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList $args -Verb RunAs -PassThru -ErrorAction Stop
     $script:Admin=$proc;$script:AdminStart=Get-Date
-    $ui.ResultTag.Text='UAC / CONFIRMACIÓN'
-    PCAD-Status 'Operación administrativa en consola. Confirma o cancela allí.' 'CONFIRMACIÓN REQUERIDA'
+    PCAD-Status 'Operación administrativa en consola. Confirma o cancela allí.' 'ADMIN_WAIT'
     PCAD-Refresh
 }
 
@@ -343,17 +376,30 @@ $timer.Add_Tick({
             if($p.HasExited){
                 $code=2;try{$code=[int]$p.ExitCode}catch{}
                 $p.Dispose();$script:Admin=$null
-                $ui.ResultTag.Text=('OPERACIÓN FINALIZADA · '+$code)
-                PCAD-Status 'Revisa la consola y el respaldo antes de concluir que se aplicaron o revirtieron reglas.' 'REVISAR OPERACIÓN'
+                $notice=if($code -eq 0){
+                    'El proceso administrativo terminó (código 0). Aún debes verificar las reglas y el respaldo.'
+                }else{
+                    ('Operación no verificada (código '+$code+'). Consulta la consola y el informe; no se presupone bloqueo.')
+                }
+                $ui.TxtFirewall.Text=$notice+[Environment]::NewLine+
+                    'Abre informes para revisar el journal de esta operación.'
+                $ui.ResultTabs.SelectedIndex=0
+                PCAD-Status $notice $(if($code -eq 0){'ADMIN_DONE'}else{'ERROR'})
                 PCAD-Refresh
             }
         }
         if($null -ne $script:Monitor){
             $p=$script:Monitor;$p.Refresh()
             if($p.HasExited){PCAD-CompleteMonitor}
+            elseif($script:CloseRequested -and !$script:MonitorStopping){
+                # Si el monitor aun creaba la carpeta, reintenta la señal con cada tick.
+                try{PCAD-StopMonitor}catch{
+                    PCAD-Status ('No se pudo solicitar la parada: '+$_.Exception.Message) 'ERROR'
+                }
+            }
         }
     }catch {
-        $ui.ActivityText.Text=('Error de seguimiento: '+$_.Exception.GetType().Name)
+        PCAD-Status ('Error de seguimiento: '+$_.Exception.GetType().Name) 'ERROR'
     }
 })
 $window.Add_Closing({
@@ -363,16 +409,24 @@ $window.Add_Closing({
         $script:Admin.Refresh()
         if(!$script:Admin.HasExited){
             $args.Cancel=$true
-            PCAD-Status 'La operación elevada continúa. Espera su finalización.' 'OPERACIÓN ACTIVA'
+            PCAD-Status 'La operación elevada continúa. Espera su finalización.' 'ADMIN_WAIT'
             return
         }
     }
     if($null -ne $script:Monitor){
         $script:Monitor.Refresh()
-        if(!$script:Monitor.HasExited){
+        if($script:Monitor.HasExited){
+            PCAD-CompleteMonitor
+        }else{
             $args.Cancel=$true
-            try{PCAD-StopMonitor}catch{}
-            PCAD-Status 'Terminando monitor antes de cerrar...' 'MONITOR ACTIVO'
+            $script:CloseRequested=$true
+            try{PCAD-StopMonitor}catch{
+                PCAD-Status ('No se pudo solicitar el cierre seguro: '+$_.Exception.Message) 'ERROR'
+            }
+            if($script:MonitorStopping){
+                PCAD-Status 'Cerrando cuando el monitor guarde el informe...' 'MONITOR_STOPPING'
+            }
+            PCAD-Refresh
             return
         }
     }
@@ -383,6 +437,35 @@ $window.Add_Closing({
     $script:ShuttingDown=$true
     $timer.Stop()
 })
+if($StateSelfTest){
+    $expected=@{
+        IDLE='LISTO';CONSULTING='CONSULTANDO';PREVIEW_OK='VISTA PREVIA';
+        PARTIAL='PARCIAL';ERROR='ERROR';MONITORING='MONITOR';
+        MONITOR_STOPPING='GUARDANDO';ADMIN_WAIT='CONFIRMACIÓN';
+        ADMIN_DONE='SIN VERIFICAR';CANCELLED='CANCELADA'
+    }
+    foreach($state in @($expected.Keys)){
+        PCAD-Status ('Prueba '+$state) $state
+        if($ui.TopStatus.Text -notmatch $expected[$state] -or
+           $ui.ResultTag.Text -cne $ui.TopStatus.Text -or
+           $ui.StatusDot.Fill.Color -ne $ui.TopStatus.Foreground.Color){
+            throw ('V43 Lote B: estado visual inconsistente '+$state)
+        }
+    }
+    PCAD-Status 'Prueba parcial' 'PARTIAL'
+    if($ui.Progress.Value -ne 0 -or $ui.Progress.IsIndeterminate){throw 'V43 Lote B: resultado parcial aparece completo'}
+    PCAD-Status 'Prueba exitosa' 'PREVIEW_OK'
+    if($ui.Progress.Value -ne 100){throw 'V43 Lote B: estado exitoso sin progreso final'}
+    PCAD-Refresh
+    if(!$ui.BtnApply.IsEnabled -or $ui.BtnCancel.IsEnabled){throw 'V43 Lote B: controles de inicio inconsistentes'}
+    $script:CloseRequested=$true;PCAD-Refresh
+    if($ui.BtnApply.IsEnabled -or $ui.BtnPreview.IsEnabled -or $ui.BtnExit.IsEnabled){throw 'V43 Lote B: no bloquea acciones al cerrar'}
+    $script:CloseRequested=$false
+    $window.Close()
+    Write-Host 'PASS V43 Lote B: 10 estados, contraste ligado a texto, progreso parcial, cierre sin acciones.'
+    exit 0
+}
+PCAD-Status 'Listo para consultar AutoCAD y WebView2, sin modificar el firewall.' 'IDLE'
 PCAD-Refresh
 $timer.Start()
 $null=$window.ShowDialog()
