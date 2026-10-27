@@ -260,7 +260,7 @@ function Invoke-PCADRecoverWithoutJournal {
     # (salvo el directorio de QA elegido explicitamente).
     $journal=[pscustomobject]@{
         Schema='PCAD4_JOURNAL_FREE_RECOVERY_1';Id=$id
-        CreatedAt=(Get-Date).ToString('o');Status='PREPARED';PolicyBackup=''
+        CreatedAt=(Get-Date).ToString('o');FinishedAt='';Status='PREPARED';PolicyBackup=''
         Notes='Snapshot previo a retirar reglas de firma estructural ParcheCAD; no prueba autoria criptografica.'
         Operations=@($eligible|ForEach-Object{
             [pscustomobject]@{RuleName=$_.RuleName;Program=$_.Program;Year=$_.Year
