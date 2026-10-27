@@ -92,7 +92,7 @@
     </Border>
     <Border Style="{StaticResource Card}" Margin="2,0,7,0" Padding="11,8">
      <StackPanel>
-      <TextBlock Text="Reglas candidatas" Style="{StaticResource Meta}"/>
+      <TextBlock Text="Reglas válidas / total" Style="{StaticResource Meta}"/>
       <TextBlock x:Name="MetricRules" Text="—" Style="{StaticResource Metric}"/>
       <TextBlock x:Name="MetricConflicts" Text="Pendiente" Style="{StaticResource Meta}"/>
      </StackPanel>

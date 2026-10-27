@@ -79,11 +79,31 @@ function Invoke-PCADRollbackRules {
     Write-PCADJournal -Journal $journal -File $JournalPath
     return [pscustomobject]@{Status=$journal.Status;Removed=$count;Remaining=$remaining;Messages=@($results.ToArray());Manifest=$JournalPath}
 }
+# UI progress is transient and never authorizes firewall changes.
+function Write-PCADApplyProgress {
+    [CmdletBinding()]
+    param([Parameter(Mandatory=$true)][string]$Path,
+        [ValidateSet('DISCOVERY','CATALOG','RULES','AWAIT_CONFIRM','APPLY','VERIFYING')][string]$Stage,
+        [int]$Completed=0,[int]$Total=0)
+    $file=[IO.Path]::GetFullPath($Path)
+    $parent=[IO.Path]::GetDirectoryName($file)
+    if(!(Test-Path -LiteralPath $parent -PathType Container)){throw 'Directorio de progreso inexistente.'}
+    $obj=[ordered]@{
+        Schema='PCAD4_APPLY_PROGRESS_1';Stage=$Stage
+        Completed=$Completed;Total=$Total;UpdatedAt=(Get-Date).ToString('o')
+    }
+    $tmp=$file+'.pending'
+    [IO.File]::WriteAllText($tmp,($obj|ConvertTo-Json -Compress),[Text.UTF8Encoding]::new($false))
+    if([IO.File]::Exists($file)){[IO.File]::Replace($tmp,$file,$null)}
+    else{[IO.File]::Move($tmp,$file)}
+}
 function Invoke-PCADApplyPlan {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory=$true)]$Plan,
         [Parameter(Mandatory=$true)][string]$BackupDirectory,
+        [ValidatePattern('^[a-f0-9]{32}$')][string]$OperationId='',
+        [string]$ProgressFile='',
         [switch]$Commit
     )
     if(!$Commit){throw 'Aplicar requiere confirmacion explicita -Commit.'}
@@ -94,12 +114,14 @@ function Invoke-PCADApplyPlan {
     if(!(Test-Path -LiteralPath $BackupDirectory -PathType Container)) {
         $null=New-Item -ItemType Directory -Path $BackupDirectory -Force -ErrorAction Stop
     }
+    if(!$OperationId){$OperationId=[guid]::NewGuid().ToString('N')}
     $journal=[pscustomobject]@{
-        Schema='PCAD4_OPERATION_1';OperationId=[guid]::NewGuid().ToString('N')
+        Schema='PCAD4_OPERATION_1';OperationId=$OperationId
         CreatedAt=(Get-Date).ToString('o');FinishedAt='';Status='PREPARED'
         Operations=@();Notes='Contiene rutas locales; no publicar este archivo en GitHub.'
     }
     $journalPath=Join-Path $BackupDirectory ('PCAD4_'+$journal.OperationId+'.json')
+    if(Test-Path -LiteralPath $journalPath){throw 'ID de operacion ya existente; no reutilizar.'}
     $seen=@{}
     foreach($e in $entries){
         $path=Assert-PCADManagedEntry -Entry $e
@@ -117,10 +139,11 @@ function Invoke-PCADApplyPlan {
     }
     Write-PCADJournal -Journal $journal -File $journalPath
     $created=0
+    $checked=0
     $stage='APPLY_START'
     try {
         foreach($e in @($journal.Operations)){
-            if($e.State -ne 'PENDING'){continue}
+            if($e.State -ne 'PENDING'){$checked++;continue}
             $state=Get-PCADActualRuleStatus -RuleName $e.RuleName -Program $e.Program
             if($state.State -ne 'MISSING'){throw ('Regla cambio antes de aplicar: '+$e.RuleName)}
             $e.State='CREATING'
@@ -136,12 +159,23 @@ function Invoke-PCADApplyPlan {
             $after=Get-PCADActualRuleStatus -RuleName $e.RuleName -Program $e.Program
             if($after.State -ne 'EXISTS_VALID'){throw ('No se pudo verificar regla creada: '+$e.RuleName)}
             $created++
-            Write-Progress -Activity 'ParcheCAD - aplicando reglas propias' -Status $e.RuleName -PercentComplete ([int](100*$created/$entries.Count))
+            $checked++
+            if($ProgressFile){Write-PCADApplyProgress -Path $ProgressFile -Stage 'APPLY' -Completed $checked -Total $entries.Count}
+            Write-Progress -Activity 'ParcheCAD - aplicando reglas propias' -Status ('Verificadas {0}/{1}' -f $checked,$entries.Count) -PercentComplete ([int](100*$checked/$entries.Count))
+        }
+        # APPLIED acredita la verificacion local de todas las reglas, no el trafico.
+        $stage='FINAL_VERIFICATION'
+        if($ProgressFile){Write-PCADApplyProgress -Path $ProgressFile -Stage 'VERIFYING' -Completed $checked -Total $entries.Count}
+        foreach($e in @($journal.Operations)){
+            $state=Get-PCADActualRuleStatus -RuleName $e.RuleName -Program $e.Program
+            if($state.State -cne 'EXISTS_VALID'){
+                throw ('Verificacion final fallida: '+$e.RuleName+' / '+$state.State)
+            }
         }
         $journal.Status='APPLIED'
         $journal.FinishedAt=(Get-Date).ToString('o')
         Write-PCADJournal -Journal $journal -File $journalPath
-        return [pscustomobject]@{Status='APPLIED';Created=$created;Manifest=$journalPath;TrafficVerified=$false}
+        return [pscustomobject]@{Status='APPLIED';Created=$created;Verified=$entries.Count;Manifest=$journalPath;TrafficVerified=$false}
     }catch {
         $reason=$_.Exception.Message
         $journal.Status='ERROR_PARTIAL'

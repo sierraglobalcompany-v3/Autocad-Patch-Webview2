@@ -77,3 +77,8 @@ Los botones de consulta se denominan **Analizar firewall** y **Analizar WebView2
 ### Bloqueo auditado seguro
 
 El monitor es estrictamente observacional. Un análisis WebView2 completo habilita un acceso **BLOQUEO AUDITADO AUTOCAD** que primero ejecuta el preview completo AutoCAD y falla cerrado si faltan ejecutables, catálogo completo o aparecen conflictos. Incluso con un plan válido, el único cambio ofrecido son reglas sobre ejecutables propios AutoCAD mediante `Reglas.ps1 -Mode Apply`, con UAC, comprobaciones nuevas y confirmación escrita. **No se crean reglas por PID ni sobre `msedgewebview2.exe`; ningún análisis WebView2 puede garantizar por sí solo ese aislamiento.** Cancelación y errores reinician el intento de aplicación auditada sin tocar Windows.
+
+
+### Evidencia de aplicación y progreso
+
+`Preview.ps1` responde `InstalledValid`, `MissingRules`, `UnverifiedRules` y `RuleVerificationState`, consistentes con el inventario de candidatos. El único motor Apply registra un GUID por intento y emite un progreso transitorio atómico `PCAD4_PROGRESS_<GUID>.json` en ProgramData (etapas de búsqueda, catálogo, filtros, espera, creación y verificación); el frontend solo lo lee. Antes de escribir el journal `APPLIED` se vuelven a verificar **todas** las reglas propias, incluidas las que ya existían; el frontend requiere `Schema`, `OperationId`, `Status`, conteo y estados `CREATED`/`ALREADY_PRESENT` coherentes. La UI no puede activar reglas ni por progreso ni por marcador de salida; UAC y la palabra `APLICAR` en la consola siguen siendo obligatorios. Las pruebas negativas rechazan `ERROR_PARTIAL`, operaciones pendientes, ID duplicado y GUID incorrecto.

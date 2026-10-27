@@ -73,6 +73,8 @@ $script:MonitorStopping=$false
 $script:MonitorStart=Get-Date
 $script:Admin=$null
 $script:AdminMode=''
+$script:AdminOperationId=''
+$script:AdminProgressFile=''
 $script:AdminStart=Get-Date
 $script:AuditReady=$false
 $script:AuditedApplyPending=$false
@@ -90,7 +92,8 @@ function PCAD-Read([string]$File){
 function PCAD-Status {
     param([string]$Text,
         [ValidateSet('IDLE','CONSULTING','PREVIEW_OK','PARTIAL','ERROR',
-                     'MONITORING','MONITOR_STOPPING','ADMIN_WAIT','ADMIN_DONE','CANCELLED')]
+                     'MONITORING','MONITOR_STOPPING','ADMIN_WAIT','ADMIN_DONE','CANCELLED',
+                     'ADMIN_PREPARING','APPLYING','VERIFYING','RULES_VERIFIED','NOT_APPLIED')]
         [string]$State='IDLE')
     $visual=switch($State){
         'IDLE'             {@('LISTO · SIN CAMBIOS','#0C7140')}
@@ -102,6 +105,11 @@ function PCAD-Status {
         'MONITOR_STOPPING' {@('GUARDANDO REGISTRO','#995F08')}
         'ADMIN_WAIT'       {@('CONFIRMACIÓN PENDIENTE','#995F08')}
         'ADMIN_DONE'       {@('TERMINÓ · SIN VERIFICAR','#995F08')}
+        'ADMIN_PREPARING' {@('PREPARANDO REGLAS','#195CB5')}
+        'APPLYING'         {@('APLICANDO REGLAS','#195CB5')}
+        'VERIFYING'        {@('VERIFICANDO REGLAS','#195CB5')}
+        'RULES_VERIFIED'   {@('REGLAS VERIFICADAS','#0C7140')}
+        'NOT_APPLIED'      {@('SIN REGLAS APLICADAS','#995F08')}
         'CANCELLED'        {@('CONSULTA CANCELADA','#52657E')}
     }
     $brush=[Windows.Media.BrushConverter]::new().ConvertFromString([string]$visual[1])
@@ -114,7 +122,7 @@ function PCAD-Status {
     if($State -in @('ERROR','PARTIAL','CANCELLED')){
         $ui.Progress.IsIndeterminate=$false
         $ui.Progress.Value=0
-    }elseif($State -eq 'PREVIEW_OK'){
+    }elseif($State -in @('PREVIEW_OK','RULES_VERIFIED')){
         $ui.Progress.IsIndeterminate=$false
         $ui.Progress.Value=100
     }
@@ -252,21 +260,31 @@ function PCAD-CompleteChild {
        $data.NoFirewallChanges -eq $true -and $data.WebView2SharedExcluded -eq $true -and
        $data.Status -in @('PREVIEW_COMPLETA','PREVIEW_PARCIAL') -and
        [int]$data.Candidates -ge 0 -and [int]$data.Conflicts -ge 0){
+        $total=[int]$data.Candidates
+        $installed=[int]$data.InstalledValid
+        $missing=[int]$data.MissingRules
+        $unverified=[int]$data.UnverifiedRules
+        $countsOK=($total -ge 0 -and $total -le 900 -and
+            $installed -ge 0 -and $missing -ge 0 -and $unverified -ge 0 -and
+            $installed+$missing+$unverified -eq $total)
         $ui.MetricAutoCAD.Text=if(@($data.Years).Count){@($data.Years) -join ', '}else{'0'}
-        $ui.MetricRules.Text=[string]$data.Candidates
-        $ui.MetricConflicts.Text=([string]$data.Conflicts+' conflictos')
-        $ui.TxtFirewall.Text=('Instalaciones: {0} | Candidatas: {1} | Conflictos: {2} | Excluidas: {3}' -f
-            $data.Installations,$data.Candidates,$data.Conflicts,$data.Excluded)+[Environment]::NewLine+
-            ('Catálogo: '+$data.CatalogStatus)+[Environment]::NewLine+
-            'PREVISUALIZACIÓN. Ninguna regla aplicada. WebView2 compartido excluido.'+[Environment]::NewLine+
+        $ui.MetricRules.Text=('{0}/{1}' -f $installed,$total)
+        $ui.MetricConflicts.Text=('{0} faltantes · {1} sin verificar' -f $missing,$unverified)
+        $ui.TxtFirewall.Text=('INSTALADAS Y VERIFICADAS LOCALMENTE: {0}/{1}' -f $installed,$total)+[Environment]::NewLine+
+            ('Faltantes: {0} | Conflictos/sin verificar: {1} | Excluidas: {2}' -f $missing,$unverified,$data.Excluded)+[Environment]::NewLine+
+            ('Estado de reglas: '+$data.RuleVerificationState+' | Catálogo: '+$data.CatalogStatus)+[Environment]::NewLine+
+            'ANÁLISIS SOLO LECTURA: no aplicó cambios. Reglas locales NO garantizan aislamiento del tráfico.'+[Environment]::NewLine+
             ('Informe: '+(Join-Path $root $reportName))
-        if($data.Status -eq 'PREVIEW_COMPLETA' -and
-           [string]$data.CatalogStatus -ceq 'OK' -and
-           [string]$data.PlanState -ceq 'PLAN_NO_APLICADO' -and
-           [int]$data.Conflicts -eq 0){
-            PCAD-Status 'Análisis de firewall completo. No se modificó el firewall.' 'PREVIEW_OK'
+        if(!$countsOK){
+            PCAD-Status 'Informe incoherente: no se puede determinar el estado de las reglas.' 'ERROR'
+        }elseif($data.Status -ne 'PREVIEW_COMPLETA' -or $data.CatalogStatus -ne 'OK' -or $unverified -gt 0){
+            PCAD-Status ('Análisis incompleto: {0}/{1} reglas verificadas; revisar conflictos.' -f $installed,$total) 'PARTIAL'
+        }elseif($total -gt 0 -and $installed -eq $total -and [string]$data.RuleVerificationState -ceq 'TODAS_VERIFICADAS'){
+            PCAD-Status ('FIREWALL APLICADO Y VERIFICADO LOCALMENTE: {0}/{1} reglas. Tráfico real no certificado.' -f $installed,$total) 'RULES_VERIFIED'
+        }elseif($installed -eq 0 -and $unverified -eq 0){
+            PCAD-Status ('SIN REGLAS APLICADAS: 0/{0} válidas; hay {1} candidatas pendientes.' -f $total,$missing) 'NOT_APPLIED'
         }else{
-            PCAD-Status 'Catálogo AutoCAD parcial. No se aplicó ninguna regla; revisa el informe.' 'PARTIAL'
+            PCAD-Status ('FIREWALL PARCIAL: {0}/{1} reglas verificadas, {2} faltantes.' -f $installed,$total,$missing) 'PARTIAL'
         }
     }elseif($kind -eq 'AUDIT' -and (Test-PCADWebAuditComplete $data)){
         $ui.MetricWeb.Text=[string]$data.TotalWebView2
@@ -297,12 +315,9 @@ function PCAD-CompleteChild {
                  [Environment]::NewLine+'Este boton SOLO bloquea ejecutables AutoCAD del plan que el motor elevado revalidara.'+
                  [Environment]::NewLine+'Puede afectar funciones y comprobaciones de licencia. Requiere UAC y escribir APLICAR.'+
                  [Environment]::NewLine+'¿Deseas continuar con el bloqueo de ejecutables AutoCAD?'
-            if([Windows.MessageBox]::Show($msg,'Bloqueo auditado AutoCAD','YesNo','Warning') -eq 'Yes'){
-                try{PCAD-StartAdmin 'Apply'}catch{
-                    PCAD-Status ('No se pudo iniciar operacion elevada: '+$_.Exception.Message) 'ERROR'
-                }
-            }else{
-                PCAD-Status 'Evaluacion auditada terminada. Bloqueo cancelado; no se modificaron reglas.' 'IDLE'
+            # La consola elevada muestra riesgos y pide APLICAR una sola vez.
+            try{PCAD-StartAdmin 'Apply'}catch{
+                PCAD-Status ('No se pudo iniciar operacion elevada: '+$_.Exception.Message) 'ERROR'
             }
         }
     }
@@ -391,16 +406,94 @@ function PCAD-CompleteMonitor {
         $null=$window.Dispatcher.BeginInvoke([Action]{ $window.Close() })
     }
 }
+# Un journal APPLIED solo acredita verificaciones locales hechas por el motor
+# elevado. El codigo de salida 0 o un total de "candidatas" no bastan.
+function Test-PCADApplyReceipt($Data,[string]$Id) {
+    if($null -eq $Data -or $Id -cnotmatch '^[a-f0-9]{32}$'){return $null}
+    if([string]$Data.Schema -cne 'PCAD4_OPERATION_1' -or
+       [string]$Data.OperationId -cne $Id -or
+       [string]$Data.Status -cne 'APPLIED' -or
+       [string]::IsNullOrWhiteSpace([string]$Data.FinishedAt)){return $null}
+    $entries=@($Data.Operations)
+    if($entries.Count -lt 1 -or $entries.Count -gt 900){return $null}
+    $names=@{}
+    $created=0
+    foreach($entry in $entries){
+        $name=[string]$entry.RuleName
+        if($name -cnotmatch '^PCAD4_A_[0-9A-F]{24}_OUT$' -or
+           [string]$entry.Group -cne 'PCAD4_MANAGED' -or
+           $names.ContainsKey($name) -or
+           [string]$entry.State -cnotin @('CREATED','ALREADY_PRESENT')){
+            return $null
+        }
+        $names[$name]=$true
+        if([string]$entry.State -ceq 'CREATED'){$created++}
+    }
+    return [pscustomobject]@{
+        Verified=$entries.Count;Created=$created;AlreadyPresent=($entries.Count-$created)
+    }
+}
+function PCAD-ReadApplyReceipt([string]$Id) {
+    if($Id -cnotmatch '^[a-f0-9]{32}$'){return $null}
+    $path=Join-Path (Join-Path $env:ProgramData 'ParcheCAD\Operations') ('PCAD4_'+$Id+'.json')
+    try{
+        $data=Get-Content -LiteralPath $path -Raw -ErrorAction Stop|ConvertFrom-Json -ErrorAction Stop
+        $verified=Test-PCADApplyReceipt -Data $data -Id $Id
+        if($null -eq $verified){return $null}
+        return [pscustomobject]@{
+            Verified=$verified.Verified;Created=$verified.Created
+            AlreadyPresent=$verified.AlreadyPresent;Journal=$path
+        }
+    }catch{return $null}
+}
+function PCAD-TrackApplyProgress {
+    if(!$script:AdminProgressFile){return}
+    $data=$null
+    try{$data=Get-Content -LiteralPath $script:AdminProgressFile -Raw -ErrorAction Stop|ConvertFrom-Json -ErrorAction Stop}catch{return}
+    if([string]$data.Schema -cne 'PCAD4_APPLY_PROGRESS_1'){return}
+    $done=[int]$data.Completed;$total=[int]$data.Total
+    if($done -lt 0 -or $total -lt 0 -or $total -gt 900 -or ($total -gt 0 -and $done -gt $total)){return}
+    switch([string]$data.Stage){
+        'DISCOVERY' { $ui.Progress.IsIndeterminate=$true
+            PCAD-Status 'Etapa 1/3: buscando instalaciones y verificando archivos AutoCAD...' 'ADMIN_PREPARING' }
+        'CATALOG' { $ui.Progress.IsIndeterminate=$true
+            PCAD-Status 'Etapa 2/3: recorriendo ejecutables AutoCAD; puede tardar varios minutos...' 'ADMIN_PREPARING' }
+        'RULES' { $ui.Progress.IsIndeterminate=$true
+            PCAD-Status 'Etapa 3/3: comprobando reglas y filtros existentes...' 'ADMIN_PREPARING' }
+        'AWAIT_CONFIRM' { $ui.Progress.IsIndeterminate=$false;$ui.Progress.Value=0
+            PCAD-Status 'Esperando APLICAR en la consola elevada. Ninguna regla nueva creada todavía.' 'ADMIN_WAIT' }
+        'APPLY' { $ui.Progress.IsIndeterminate=$false
+            if($total -gt 0){$ui.Progress.Value=[int](100*$done/$total)}
+            PCAD-Status ('Creando o verificando reglas AutoCAD: {0}/{1}. No cierres el proceso.' -f $done,$total) 'APPLYING' }
+        'VERIFYING' { $ui.Progress.IsIndeterminate=$true
+            PCAD-Status ('Verificación final de {0} reglas locales en Windows Firewall...' -f $total) 'VERIFYING' }
+    }
+}
 function PCAD-StartAdmin([ValidateSet('Apply','Rollback','RestoreFirewall','RestoreWebView2')][string]$Mode,[string]$Manifest=''){
     if($null -ne $script:Child -or $null -ne $script:Admin){return}
     $engine=Join-Path $PSScriptRoot 'ParcheCAD.Reglas.ps1'
     if(!(Test-Path -LiteralPath $engine -PathType Leaf)){throw 'No se encontró motor de reglas.'}
     $args='-NoLogo -NoProfile -ExecutionPolicy Bypass -File "{0}" -Mode {1} -ConfirmChange' -f $engine,$Mode
+    $id=''
+    $progress=''
+    if($Mode -eq 'Apply'){
+        $id=[guid]::NewGuid().ToString('N')
+        $progress=Join-Path (Join-Path $env:ProgramData 'ParcheCAD\Operations') ('PCAD4_PROGRESS_'+$id+'.json')
+        $args+=' -OperationId '+$id
+    }
     if($Mode -eq 'Rollback'){$args+=' -Manifest "'+$Manifest+'"'}
     if($Mode -in @('RestoreFirewall','RestoreWebView2')){$args+=' -InteractivePause'}
     $proc=Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList $args -Verb RunAs -PassThru -ErrorAction Stop
     $script:Admin=$proc;$script:AdminStart=Get-Date;$script:AdminMode=$Mode
-    PCAD-Status 'Analizando reglas del sistema. Confirma cualquier restauracion en la consola elevada.' 'ADMIN_WAIT'
+    $script:AdminOperationId=$id
+    $script:AdminProgressFile=$progress
+    $ui.Elapsed.Text='00:00'
+    $ui.Progress.Value=0;$ui.Progress.IsIndeterminate=$true
+    if($Mode -eq 'Apply'){
+        PCAD-Status 'Etapa 1/3: preparando análisis AutoCAD. La única confirmación será escribir APLICAR en la consola.' 'ADMIN_PREPARING'
+    }else{
+        PCAD-Status 'Abriendo restauración. Revisa las reglas y confirma en la consola elevada.' 'ADMIN_WAIT'
+    }
     PCAD-Refresh
 }
 
@@ -435,13 +528,9 @@ $ui.BtnReports.Add_Click({
 function PCAD-ConfirmAutoCADBlock {
     # Una sola operacion elevada para ambos accesos: NO analizador ni reglas WebView2.
     if($null -ne $script:Child -or $null -ne $script:Admin -or $script:CloseRequested){return}
-    $msg='BLOQUEO GENERAL SOLO AUTOCAD: el motor verificará rutas, conflictos y respaldos antes de aplicar.'+
-         [Environment]::NewLine+'No necesitas analizar WebView2. NO bloqueará el runtime Microsoft compartido.'+
-         [Environment]::NewLine+'Puede afectar funciones online y comprobaciones de licencia de AutoCAD.'+
-         [Environment]::NewLine+'Se solicitará UAC y escribir APLICAR. ¿Deseas continuar?'
-    if([Windows.MessageBox]::Show($msg,'Bloqueo general AutoCAD','YesNo','Warning') -eq 'Yes'){
-        try{PCAD-StartAdmin 'Apply'}catch{[Windows.MessageBox]::Show($_.Exception.Message,'Permisos de administrador')|Out-Null}
-    }
+    # Una sola confirmacion escrita en el motor elevado; sin segundo dialogo.
+    # UAC autoriza elevar, no sustituye la confirmacion APLICAR.
+    try{PCAD-StartAdmin 'Apply'}catch{[Windows.MessageBox]::Show($_.Exception.Message,'Permisos de administrador')|Out-Null}
 }
 $ui.BtnApply.Add_Click({PCAD-ConfirmAutoCADBlock})
 $ui.BtnGenericAutoCAD.Add_Click({PCAD-ConfirmAutoCADBlock})
@@ -488,22 +577,39 @@ $timer.Add_Tick({
         }
         if($null -ne $script:Admin){
             $p=$script:Admin;$p.Refresh()
+            if(!$p.HasExited -and $script:AdminMode -eq 'Apply'){PCAD-TrackApplyProgress}
             if($p.HasExited){
                 $code=2;try{$code=[int]$p.ExitCode}catch{}
                 $p.Dispose();$script:Admin=$null
                 $notice=if($script:AdminMode -in @('RestoreFirewall','RestoreWebView2')){
                     if($code -eq 0){'El asistente de restauracion termino. Puede no haber quitado reglas; verifica el journal en ProgramData.'}
                     else{'Restauracion cancelada, parcial o fallida; consulta consola y journal. No asumir reparacion.'}
-                }elseif($code -eq 0){
-                    'El proceso administrativo terminó (código 0). Aún debes verificar las reglas y el respaldo.'
+                }elseif($script:AdminMode -eq 'Apply'){
+                    $receipt=if($code -eq 0){PCAD-ReadApplyReceipt $script:AdminOperationId}else{$null}
+                    if($null -ne $receipt){
+                        $ui.MetricRules.Text=('{0}/{0}' -f $receipt.Verified)
+                        $ui.MetricConflicts.Text='0 conflictos · reglas locales verificadas'
+                        $ui.Progress.IsIndeterminate=$false;$ui.Progress.Value=100
+                        $notice=('APLICADO Y VERIFICADO LOCALMENTE: {0}/{0} reglas. Nuevas: {1}; ya existentes: {2}. Tráfico real NO certificado.' -f $receipt.Verified,$receipt.Created,$receipt.AlreadyPresent)
+                        $ui.TxtFirewall.Text=$notice+[Environment]::NewLine+'Respaldo: '+$receipt.Journal
+                        PCAD-Status $notice 'RULES_VERIFIED'
+                    }else{
+                        $notice='Aplicación no acreditada: resultado final o respaldo no verificable; puede haber reglas creadas. Ejecuta ANALIZAR FIREWALL antes de cualquier otra acción.'
+                        $ui.Progress.IsIndeterminate=$false;$ui.Progress.Value=0
+                        $ui.TxtFirewall.Text=$notice+[Environment]::NewLine+
+                            ('Informes: '+(PCAD-CurrentReportFolder))
+                        PCAD-Status $notice 'PARTIAL'
+                    }
                 }else{
-                    ('Operación no verificada (código '+$code+'). Consulta la consola y el informe; no se presupone bloqueo.')
+                    $notice=('Operación no verificada (código '+$code+'). Revisa consola e informes.')
                 }
-                $ui.TxtFirewall.Text=$notice+[Environment]::NewLine+
-                    ('Directorio del informe: '+(PCAD-CurrentReportFolder))
+                if($script:AdminMode -ne 'Apply'){
+                    $ui.TxtFirewall.Text=$notice+[Environment]::NewLine+
+                        ('Directorio del informe: '+(PCAD-CurrentReportFolder))
+                    PCAD-Status $notice $(if($code -eq 0){'ADMIN_DONE'}else{'ERROR'})
+                }
                 $ui.WorkTabs.SelectedIndex=0
                 $ui.ResultTabs.SelectedIndex=0
-                PCAD-Status $notice $(if($code -eq 0){'ADMIN_DONE'}else{'ERROR'})
                 PCAD-Refresh
             }
         }
@@ -561,7 +667,9 @@ if($StateSelfTest){
         IDLE='LISTO';CONSULTING='CONSULTANDO';PREVIEW_OK='VISTA PREVIA';
         PARTIAL='PARCIAL';ERROR='ERROR';MONITORING='MONITOR';
         MONITOR_STOPPING='GUARDANDO';ADMIN_WAIT='CONFIRMACIÓN';
-        ADMIN_DONE='SIN VERIFICAR';CANCELLED='CANCELADA'
+        ADMIN_DONE='SIN VERIFICAR';CANCELLED='CANCELADA';
+        ADMIN_PREPARING='PREPARANDO';APPLYING='APLICANDO';VERIFYING='VERIFICANDO';
+        RULES_VERIFIED='VERIFICADAS';NOT_APPLIED='SIN REGLAS'
     }
     foreach($state in @($expected.Keys)){
         PCAD-Status ('Prueba '+$state) $state
@@ -589,6 +697,32 @@ if($StateSelfTest){
     if((PCAD-CurrentReportFolder) -notlike '*ParcheCAD*Operations'){throw 'AUDIT10: apply folder wrong'}
     $script:AdminMode=''
     if((PCAD-CurrentReportFolder) -ne $script:Reports){throw 'AUDIT10: read-only reports folder wrong'}
+    $sampleId=[guid]::NewGuid().ToString('N')
+    $sample=[pscustomobject]@{
+        Schema='PCAD4_OPERATION_1';OperationId=$sampleId
+        Status='APPLIED';FinishedAt=(Get-Date).ToString('o')
+        Operations=@(
+            [pscustomobject]@{RuleName=('PCAD4_A_'+('A'*24)+'_OUT');Group='PCAD4_MANAGED';State='CREATED'},
+            [pscustomobject]@{RuleName=('PCAD4_A_'+('B'*24)+'_OUT');Group='PCAD4_MANAGED';State='ALREADY_PRESENT'}
+        )
+    }
+    $receipt=Test-PCADApplyReceipt -Data $sample -Id $sampleId
+    if($null -eq $receipt -or $receipt.Verified -ne 2 -or
+       $receipt.Created -ne 1 -or $receipt.AlreadyPresent -ne 1){
+        throw 'QA: valid Apply receipt not recognized'
+    }
+    $sample.Status='ERROR_PARTIAL'
+    if($null -ne (Test-PCADApplyReceipt -Data $sample -Id $sampleId)){
+        throw 'QA: partial journal incorrectly claimed applied'
+    }
+    $sample.Status='APPLIED';$sample.Operations[1].State='PENDING'
+    if($null -ne (Test-PCADApplyReceipt -Data $sample -Id $sampleId)){
+        throw 'QA: pending operation falsely verified'
+    }
+    $sample.Operations[1].State='CREATED';$sample.Operations[1].RuleName=$sample.Operations[0].RuleName
+    if($null -ne (Test-PCADApplyReceipt -Data $sample -Id $sampleId)){
+        throw 'QA: duplicate rule IDs accepted'
+    }
     $valid=[pscustomobject]@{
         Schema='PCAD_AUTOCAD_PREVIEW_1';ReadOnly=$true;NoFirewallChanges=$true
         WebView2SharedExcluded=$true;Status='PREVIEW_COMPLETA';CatalogStatus='OK'

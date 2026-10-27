@@ -6,6 +6,7 @@ param(
     [ValidateRange(2023,2027)][int[]]$Years=@(2023,2024,2025,2026,2027),
     [string]$Manifest='',
     [string]$BackupDirectory='',
+    [ValidatePattern('^[a-f0-9]{32}$')][string]$OperationId='',
     [switch]$ConfirmChange,
     [switch]$InteractivePause
 )
@@ -18,6 +19,14 @@ $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot 'ParcheCAD.Historico.ps1')
 $root=Split-Path -Parent $PSScriptRoot
 if(!$BackupDirectory){$BackupDirectory=Join-Path $env:ProgramData 'ParcheCAD\Operations'}
+$progressFile=''
+if($Mode -eq 'Apply' -and $OperationId){
+    $null=New-Item -ItemType Directory -Path $BackupDirectory -Force -ErrorAction Stop
+    $progressFile=Join-Path $BackupDirectory ('PCAD4_PROGRESS_'+$OperationId+'.json')
+}
+function PCAD-ReportApplyStage([string]$Step,[int]$Completed=0,[int]$Total=0){
+    if($progressFile){Write-PCADApplyProgress -Path $progressFile -Stage $Step -Completed $Completed -Total $Total}
+}
 Write-Host 'ParcheCAD 4.3 | Motor de reglas por ruta' -ForegroundColor Cyan
 Write-Host 'NO controla msedgewebview2.exe compartido ni garantiza ausencia de trafico.'
 try {
@@ -104,13 +113,16 @@ try {
         if($result.Status -ne 'ROLLED_BACK'){exit 2}
         exit 0
     }
+    PCAD-ReportApplyStage 'DISCOVERY'
     Write-Host 'ETAPA 1/3: examinando instalaciones de AutoCAD (registro y firmas), sin cambiar reglas...' -ForegroundColor Cyan
     $clock=[Diagnostics.Stopwatch]::StartNew()
     $inst=@(Get-PCADInstallations -InternalPaths -ShowProgress|Where-Object {$_.Year -in $Years -and $_.FileFound})
     Write-Host ('ETAPA 1/3 TERMINADA: {0} instalacion(es) verificada(s) en {1:n1}s.' -f $inst.Count,$clock.Elapsed.TotalSeconds)
+    PCAD-ReportApplyStage 'CATALOG'
     Write-Host 'ETAPA 2/3: leyendo carpetas y ejecutables AutoCAD. Puede tardar; limite conservador por instalacion.' -ForegroundColor Cyan
     $cat=Get-PCADExecutableCatalog -Installations $inst -SharedRoots @() -InternalPaths -ShowProgress
     Write-Host ('ETAPA 2/3 TERMINADA: {0} entradas, catalogo {1}, tiempo acumulado {2:n1}s.' -f @($cat.Entries).Count,$cat.Status,$clock.Elapsed.TotalSeconds)
+    PCAD-ReportApplyStage 'RULES'
     Write-Host 'ETAPA 3/3: comprobando filtros y reglas actuales. AUN no se aplican cambios.' -ForegroundColor Cyan
     if($cat.Status -ne 'OK'){
         Write-Warning 'Catalogo incompleto; se conserva detalle de advertencias.'
@@ -136,10 +148,12 @@ try {
     $null=Assert-PCADRecoveryReady -JournalDirectory $BackupDirectory
     Write-Warning 'El bloqueo saliente por ruta afecta tambien redes LAN; AutoCAD puede perder funciones o validaciones de suscripcion.'
     Write-Warning 'Los componentes Autodesk compartidos y el WebView2 de Microsoft no se modifican.'
+    PCAD-ReportApplyStage 'AWAIT_CONFIRM'
     if((Read-Host 'Escribe APLICAR para confirmar') -cne 'APLICAR'){throw 'Operacion cancelada.'}
     # Reconsultar al final de la confirmacion por si aparecio un journal pendiente.
     $null=Assert-PCADRecoveryReady -JournalDirectory $BackupDirectory
-    $result=Invoke-PCADApplyPlan -Plan $plan -BackupDirectory $BackupDirectory -Commit
+    PCAD-ReportApplyStage 'APPLY' -Completed 0 -Total ([int]$plan.Count)
+    $result=Invoke-PCADApplyPlan -Plan $plan -BackupDirectory $BackupDirectory -OperationId $OperationId -ProgressFile $progressFile -Commit
     $result|Format-List|Out-Host
     if($result.Status -ne 'APPLIED'){exit 2}
     Write-Host 'Reglas creadas/verificadas. Las conexiones reales NO estan aun certificadas.'
@@ -148,6 +162,9 @@ try {
     Write-Host ('ERROR: '+$_.Exception.Message) -ForegroundColor Red
     exit 2
 } finally {
+    if($progressFile -and (Test-Path -LiteralPath $progressFile -PathType Leaf)){
+        try{Remove-Item -LiteralPath $progressFile -Force -ErrorAction Stop}catch{}
+    }
     if($InteractivePause -and $Mode -in @('RestoreFirewall','RestoreWebView2')){
         $null=Read-Host 'Presiona ENTER para cerrar este informe y volver a ParcheCAD'
     }
