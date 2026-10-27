@@ -94,8 +94,12 @@ function Write-PCADApplyProgress {
     }
     $tmp=$file+'.pending'
     [IO.File]::WriteAllText($tmp,($obj|ConvertTo-Json -Compress),[Text.UTF8Encoding]::new($false))
-    if([IO.File]::Exists($file)){[IO.File]::Replace($tmp,$file,$null)}
-    else{[IO.File]::Move($tmp,$file)}
+    if([IO.File]::Exists($file)){
+        # .NET Framework 4.x en PowerShell 5.1 requiere backup no vacio.
+        $backup=$file+'.prev'
+        [IO.File]::Replace($tmp,$file,$backup)
+        try{if([IO.File]::Exists($backup)){[IO.File]::Delete($backup)}}catch{}
+    }else{[IO.File]::Move($tmp,$file)}
 }
 function Invoke-PCADApplyPlan {
     [CmdletBinding()]
