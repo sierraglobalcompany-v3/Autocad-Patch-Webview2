@@ -24,7 +24,7 @@ if($work.Width -gt 0 -and $work.Height -gt 0){
 }
 $names=@('MainWindow','MetricAutoCAD','MetricRules','MetricConflicts',
  'MetricWeb','MetricProbable','MetricsGrid','WorkTabs','DetailsExpander','FirewallCard','WebCard','TopStatus','StatusDot','FirewallHint','MonitorHint',
- 'BtnPreview','BtnApply','BtnRollback','BtnAudit','BtnMonitor','BtnStopMonitor',
+ 'BtnPreview','BtnApply','BtnRollback','BtnAudit','BtnMonitor','BtnStopMonitor','BtnGenericAutoCAD','BtnWebRestoreInfo',
  'BtnReports','BtnCancel','BtnExit','ActivityText','Elapsed','Progress',
  'TxtFirewall','TxtWeb','TxtMonitor','ResultTabs','ResultTag')
 $ui=@{}
@@ -46,8 +46,8 @@ $window.Add_SizeChanged({PCAD-Layout -WindowWidth $window.ActualWidth})
 PCAD-Layout -WindowWidth ([double]$window.Width)
 if($SelfTest){
     if($ui.BtnStopMonitor.IsEnabled -or $ui.BtnCancel.IsEnabled){throw 'WPF: dangerous initial controls.'}
-    if($window.Title -notmatch '4.3' -or $ui.BtnPreview.Content.Text -notmatch 'REGLAS' -or
-       $ui.BtnAudit.Content.Text -notmatch 'WEBVIEW2'){throw 'WPF: missing dashboard actions.'}
+    if($window.Title -notmatch '4.3' -or $ui.BtnPreview.Content.Text -notmatch 'ANALIZAR FIREWALL' -or
+       $ui.BtnAudit.Content.Text -notmatch 'ANALIZAR WEBVIEW2'){throw 'WPF: missing dashboard actions.'}
     foreach($w in @(430.0,580.0,780.0,1120.0,1440.0)){
         PCAD-Layout -WindowWidth $w
         $cols=if($w -ge 840){4}elseif($w -ge 540){2}else{1}
@@ -121,6 +121,8 @@ function PCAD-Refresh {
     $ui.BtnPreview.IsEnabled=(!$busy)
     $ui.BtnAudit.IsEnabled=(!$busy)
     $ui.BtnApply.IsEnabled=(!$busy)
+    $ui.BtnGenericAutoCAD.IsEnabled=(!$busy)
+    $ui.BtnWebRestoreInfo.IsEnabled=(!$busy)
     $ui.BtnRollback.IsEnabled=(!$busy -and (Test-Path -LiteralPath (Join-Path $script:Reports 'operaciones') -PathType Container))
     $ui.BtnCancel.IsEnabled=($null -ne $script:Child)
     $ui.BtnMonitor.IsEnabled=(!$busy -and $null -eq $script:Monitor)
@@ -164,7 +166,7 @@ function PCAD-StartChild([string]$Kind){
     }else{
         $ui.WorkTabs.SelectedIndex=1
         $ui.ResultTabs.SelectedIndex=1
-        PCAD-Status 'Auditando WebView2: instantánea observacional y atribución probable...' 'CONSULTING'
+        PCAD-Status 'Analizando WebView2: procesos y conexiones, sin cambios en el firewall...' 'CONSULTING'
     }
     PCAD-Refresh
 }
@@ -199,7 +201,7 @@ function PCAD-CompleteChild {
             'PREVISUALIZACIÓN. Ninguna regla aplicada. WebView2 compartido excluido.'+[Environment]::NewLine+
             ('Informe: '+(Join-Path $root $reportName))
         if($data.Status -eq 'PREVIEW_COMPLETA'){
-            PCAD-Status 'Reglas AutoCAD consultadas. No se modificó el firewall.' 'PREVIEW_OK'
+            PCAD-Status 'Análisis de firewall completo. No se modificó el firewall.' 'PREVIEW_OK'
         }else{
             PCAD-Status 'Catálogo AutoCAD parcial. No se aplicó ninguna regla; revisa el informe.' 'PARTIAL'
         }
@@ -213,7 +215,7 @@ function PCAD-CompleteChild {
             'Bloqueables automáticamente: 0. Runtime compartido protegido.'+[Environment]::NewLine+
             'Relación padre/PID observacional; no verifica aislamiento ni bloqueo de tráfico.'+[Environment]::NewLine+
             ('Informe: '+(Join-Path $root $reportName))
-        PCAD-Status 'WebView2 auditado. Ningún bloqueo aplicado.' 'PREVIEW_OK'
+        PCAD-Status 'WebView2 analizado. Ningún bloqueo aplicado.' 'PREVIEW_OK'
     }else{
         PCAD-Status 'No se pudo verificar la consulta. No se aplicaron reglas.' 'ERROR'
         $msg='Resultado incompleto; ver errores locales en: '+$script:ChildErr
@@ -310,7 +312,7 @@ function PCAD-StartAdmin([string]$Mode,[string]$Manifest=''){
     PCAD-Refresh
 }
 
-$ui.BtnPreview.Add_Click({try{PCAD-StartChild 'PREVIEW'}catch{[Windows.MessageBox]::Show($_.Exception.Message,'Vista previa')|Out-Null}})
+$ui.BtnPreview.Add_Click({try{PCAD-StartChild 'PREVIEW'}catch{[Windows.MessageBox]::Show($_.Exception.Message,'Analizar firewall')|Out-Null}})
 $ui.BtnAudit.Add_Click({try{PCAD-StartChild 'AUDIT'}catch{[Windows.MessageBox]::Show($_.Exception.Message,'WebView2')|Out-Null}})
 $ui.BtnMonitor.Add_Click({
     $warning='El monitor observa conexiones y procesos; no verifica ausencia absoluta de tráfico. Iniciar ahora?'
@@ -325,13 +327,28 @@ $ui.BtnReports.Add_Click({
         Start-Process -FilePath 'explorer.exe' -ArgumentList ('"'+$script:Reports+'"')
     }else{[Windows.MessageBox]::Show('Aún no hay informes.','ParcheCAD')|Out-Null}
 })
-$ui.BtnApply.Add_Click({
-    $msg='ParcheCAD comprobará ejecutables, rutas, conflictos y respaldos nuevamente.'+[Environment]::NewLine+
-         'El bloqueo puede afectar funciones, red y validaciones de licencia de AutoCAD.'+[Environment]::NewLine+
-         'No bloqueará WebView2 compartido. Requiere UAC y escribir APLICAR. Continuar?'
-    if([Windows.MessageBox]::Show($msg,'Firewall AutoCAD','YesNo','Warning') -eq 'Yes'){
+function PCAD-ConfirmAutoCADBlock {
+    # Una sola operacion elevada para ambos accesos: NO analizador ni reglas WebView2.
+    if($null -ne $script:Child -or $null -ne $script:Admin -or $script:CloseRequested){return}
+    $msg='BLOQUEO GENERAL SOLO AUTOCAD: el motor verificará rutas, conflictos y respaldos antes de aplicar.'+
+         [Environment]::NewLine+'No necesitas analizar WebView2. NO bloqueará el runtime Microsoft compartido.'+
+         [Environment]::NewLine+'Puede afectar funciones online y comprobaciones de licencia de AutoCAD.'+
+         [Environment]::NewLine+'Se solicitará UAC y escribir APLICAR. ¿Deseas continuar?'
+    if([Windows.MessageBox]::Show($msg,'Bloqueo general AutoCAD','YesNo','Warning') -eq 'Yes'){
         try{PCAD-StartAdmin 'Apply'}catch{[Windows.MessageBox]::Show($_.Exception.Message,'Permisos de administrador')|Out-Null}
     }
+}
+$ui.BtnApply.Add_Click({PCAD-ConfirmAutoCADBlock})
+$ui.BtnGenericAutoCAD.Add_Click({PCAD-ConfirmAutoCADBlock})
+$ui.BtnWebRestoreInfo.Add_Click({
+    # El runtime Microsoft no se modifica por ParcheCAD: nada propio que revertir.
+    # No borrar reglas de terceros ni intentar revertirlas por PID.
+    $message='ParcheCAD no crea bloqueos de WebView2 compartido, por lo que no tiene reglas propias de WebView2 para restaurar.'+
+             [Environment]::NewLine+'Ningún cambio se realizó en Windows.'+
+             [Environment]::NewLine+'Para restaurar reglas de AutoCAD que sí haya creado ParcheCAD, usa «Revertir reglas propias» en la pestaña Firewall AutoCAD.'+
+             [Environment]::NewLine+'No se borrarán reglas externas de firewall.'
+    $ui.WorkTabs.SelectedIndex=1
+    [Windows.MessageBox]::Show($message,'Estado de restauración WebView2','OK','Information')|Out-Null
 })
 $ui.BtnRollback.Add_Click({
     $root=Join-Path $script:Reports 'operaciones'
@@ -459,9 +476,9 @@ if($StateSelfTest){
     PCAD-Status 'Prueba exitosa' 'PREVIEW_OK'
     if($ui.Progress.Value -ne 100){throw 'V43 Lote B: estado exitoso sin progreso final'}
     PCAD-Refresh
-    if(!$ui.BtnApply.IsEnabled -or $ui.BtnCancel.IsEnabled){throw 'V43 Lote B: controles de inicio inconsistentes'}
+    if(!$ui.BtnApply.IsEnabled -or !$ui.BtnGenericAutoCAD.IsEnabled -or $ui.BtnCancel.IsEnabled){throw 'V43 Lote B: controles de inicio inconsistentes'}
     $script:CloseRequested=$true;PCAD-Refresh
-    if($ui.BtnApply.IsEnabled -or $ui.BtnPreview.IsEnabled -or $ui.BtnExit.IsEnabled){throw 'V43 Lote B: no bloquea acciones al cerrar'}
+    if($ui.BtnApply.IsEnabled -or $ui.BtnGenericAutoCAD.IsEnabled -or $ui.BtnWebRestoreInfo.IsEnabled -or $ui.BtnPreview.IsEnabled -or $ui.BtnExit.IsEnabled){throw 'V43 Lote B: no bloquea acciones al cerrar'}
     $script:CloseRequested=$false
     $window.Close()
     Write-Host 'PASS V43 Lote B: 10 estados, contraste ligado a texto, progreso parcial, cierre sin acciones.'

@@ -67,3 +67,8 @@ PowerShell 5.1 en Windows, WPF nativo sin instalación de otros runtimes, servic
 - https://learn.microsoft.com/en-us/windows/security/operating-system-security/network-security/windows-firewall/rules
 - https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/process-model
 - https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/user-data-folder
+
+
+## Accesos de la interfaz compacta
+
+Los botones de consulta se denominan **Analizar firewall** y **Analizar WebView2** para aclarar que son consultas de solo lectura. El acceso **Bloqueo general AutoCAD** en la pestaña WebView2 reutiliza la misma función elevada del firewall de AutoCAD, sin analizar WebView2 y sin instalar reglas sobre `msedgewebview2.exe`. **Restaurar WebView2 · Estado** solo informa de que no hay reglas WebView2 creadas por ParcheCAD: no borra reglas, archivos ni instalaciones del sistema. La reversión real existente y respaldada se realiza sobre reglas AutoCAD propias.

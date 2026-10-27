@@ -6,8 +6,8 @@ Aplicación local para Windows y AutoCAD 2023–2027, construida con PowerShell 
 
 1. Extrae el ZIP completo en una carpeta propia, por ejemplo `C:\ParcheCAD_4.3`. No ejecutes los scripts sueltos desde dentro del ZIP.
 2. Ejecuta **`Abrir_ParcheCAD.cmd`**. Se abrirá el tablero WPF; no modifica el firewall al iniciarse.
-3. **Ver reglas AutoCAD:** inventaría ejecutables de instalaciones locales, revisa rutas, conflictos y filtros en un proceso de solo lectura; puede tardar mientras muestra progreso y permite cancelar.
-4. **Auditar WebView2:** detecta procesos y conexiones observables, clasifica su relación probable con AutoCAD y protege el runtime compartido de Microsoft. Una atribución probable **NO** permite bloquearlo automáticamente.
+3. **Analizar firewall:** inventaría ejecutables de instalaciones locales, revisa rutas, conflictos y filtros en un proceso de solo lectura; puede tardar mientras muestra progreso y permite cancelar.
+4. **Analizar WebView2:** detecta procesos y conexiones observables, clasifica su relación probable con AutoCAD y protege el runtime compartido de Microsoft. Una atribución probable **NO** permite bloquearlo automáticamente.
 5. **Iniciar monitor:** observa temporalmente TCP, endpoints UDP y procesos (máximo 10 minutos). Pulsa detener para guardar el informe; el registro tampoco certifica aislamiento ni ausencia de tráfico.
 6. **Abrir informes:** consulta los JSON y resúmenes locales. Inspecciónalos antes de compartir: pueden contener metadatos de procesos y equipos.
 
@@ -42,3 +42,8 @@ Proyecto independiente, no afiliado a Autodesk o Microsoft. No alteres licenciam
 ### Pantalla compacta sin desplazamiento normal
 
 El panel principal usa dos pestañas —**Firewall AutoCAD** y **Analizador WebView2**—; muestra únicamente las acciones de la tarea activa, cuatro métricas, progreso y botones de cierre. Los detalles técnicos permanecen plegados en **Detalles e informes**. A tamaño normal (1050×665 unidades WPF), el diseño busca evitar scroll vertical. En pantallas pequeñas o con escalado de accesibilidad elevado conserva scroll para no ocultar controles. La interfaz no altera los scripts ni las garantías de seguridad.
+
+
+### Bloqueo general y restauración
+
+El acceso **Bloqueo general AutoCAD** en WebView2 ejecuta exactamente el motor **Verificar y aplicar** de AutoCAD: no necesita analizar primero y revalida rutas y recuperación con UAC y confirmación escrita. **No bloquea WebView2**. El control **Restaurar WebView2 · Estado** explica que ParcheCAD nunca instaló reglas de WebView2 compartido; por tanto no existen reglas propias que revertir. Para revertir reglas AutoCAD utiliza **Revertir reglas propias** con el journal original. Nunca borrar reglas ajenas ni impedir el funcionamiento del runtime compartido.

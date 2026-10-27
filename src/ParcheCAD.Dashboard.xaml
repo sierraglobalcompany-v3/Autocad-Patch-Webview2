@@ -120,11 +120,11 @@
      <TabItem Header="Firewall AutoCAD" AutomationProperties.Name="Funciones de firewall AutoCAD">
       <Border x:Name="FirewallCard" Background="White" Padding="6,10,6,0">
        <StackPanel>
-        <TextBlock Text="Comprueba las reglas existentes antes de aplicar cambios." Style="{StaticResource Meta}" Margin="0,0,0,9"/>
+        <TextBlock Text="Analiza ejecutables y reglas existentes. No modifica el firewall." Style="{StaticResource Meta}" Margin="0,0,0,9"/>
         <Grid>
          <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="9"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-         <Button x:Name="BtnPreview" Grid.Column="0" Style="{StaticResource Action}" AutomationProperties.Name="Ver reglas AutoCAD">
-          <TextBlock Text="VER REGLAS" TextWrapping="Wrap" TextAlignment="Center"/>
+         <Button x:Name="BtnPreview" Grid.Column="0" Style="{StaticResource Action}" AutomationProperties.Name="Analizar firewall AutoCAD, solo lectura">
+          <TextBlock Text="ANALIZAR FIREWALL" TextWrapping="Wrap" TextAlignment="Center"/>
          </Button>
          <Button x:Name="BtnApply" Grid.Column="2" Style="{StaticResource Action}" Background="#0B7142" AutomationProperties.Name="Verificar y aplicar reglas">
           <TextBlock Text="VERIFICAR Y APLICAR" TextWrapping="Wrap" TextAlignment="Center"/>
@@ -140,14 +140,14 @@
        </StackPanel>
       </Border>
      </TabItem>
-     <TabItem Header="Analizador WebView2" AutomationProperties.Name="Auditoría y monitor WebView2">
+     <TabItem Header="WebView2" AutomationProperties.Name="Análisis y monitor WebView2">
       <Border x:Name="WebCard" Background="White" Padding="6,10,6,0">
        <StackPanel>
         <TextBlock Text="Observa procesos y conexiones. No modifica el firewall." Style="{StaticResource Meta}" Margin="0,0,0,9"/>
         <Grid>
          <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="9"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-         <Button x:Name="BtnAudit" Grid.Column="0" Style="{StaticResource Action}" AutomationProperties.Name="Auditar WebView2">
-          <TextBlock Text="AUDITAR WEBVIEW2" TextWrapping="Wrap" TextAlignment="Center"/>
+         <Button x:Name="BtnAudit" Grid.Column="0" Style="{StaticResource Action}" AutomationProperties.Name="Analizar WebView2, solo lectura">
+          <TextBlock Text="ANALIZAR WEBVIEW2" TextWrapping="Wrap" TextAlignment="Center"/>
          </Button>
          <Button x:Name="BtnMonitor" Grid.Column="2" Style="{StaticResource Action}" Background="#354F9E" AutomationProperties.Name="Iniciar monitor WebView2">
           <TextBlock Text="INICIAR MONITOR" TextWrapping="Wrap" TextAlignment="Center"/>
@@ -160,6 +160,16 @@
          </Button>
          <TextBlock x:Name="MonitorHint" Grid.Column="1" Text="Solo lectura · máximo 10 minutos" Style="{StaticResource Meta}" Margin="12,0,0,0" VerticalAlignment="Center"/>
         </Grid>
+        <Grid Margin="0,9,0,0">
+         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="9"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+         <Button x:Name="BtnGenericAutoCAD" Grid.Column="0" Style="{StaticResource Secondary}" AutomationProperties.Name="Bloqueo general de AutoCAD, sin analizar WebView2">
+          <TextBlock Text="BLOQUEO GENERAL AUTOCAD" TextWrapping="Wrap" TextAlignment="Center"/>
+         </Button>
+         <Button x:Name="BtnWebRestoreInfo" Grid.Column="2" Style="{StaticResource Secondary}" AutomationProperties.Name="Comprobar si WebView2 necesita restauración">
+          <TextBlock Text="RESTAURAR WEBVIEW2 · ESTADO" TextWrapping="Wrap" TextAlignment="Center"/>
+         </Button>
+        </Grid>
+        <TextBlock Text="El bloqueo general afecta solo a ejecutables AutoCAD. WebView2 compartido nunca se bloquea." Style="{StaticResource Meta}" Margin="0,6,0,0"/>
        </StackPanel>
       </Border>
      </TabItem>
@@ -191,7 +201,7 @@
     </Expander.Header>
     <TabControl x:Name="ResultTabs" Height="158" Margin="6" Background="White">
      <TabItem Header="AutoCAD">
-      <TextBox x:Name="TxtFirewall" Background="#F5F8FD" BorderThickness="0" Padding="9" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="12" Text="Ver reglas AutoCAD genera una vista previa; no cambia el firewall."/>
+      <TextBox x:Name="TxtFirewall" Background="#F5F8FD" BorderThickness="0" Padding="9" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="12" Text="Analizar firewall comprueba ejecutables y reglas; no cambia Windows."/>
      </TabItem>
      <TabItem Header="WebView2">
       <TextBox x:Name="TxtWeb" Background="#F5F8FD" BorderThickness="0" Padding="9" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="12" Text="La atribución probable no certifica aislamiento."/>
