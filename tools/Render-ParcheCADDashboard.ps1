@@ -106,4 +106,4 @@ foreach($width in @(430,580,780,1120,1440)){
 Export-PCADSample -Width 580 -Stress $true
 Export-PCADSample -Width 1120 -Stress $true
 $window.Close()
-Write-Host ('PASS: WPF screenshot rendered to '+$path)
+Write-Host 'PASS: WPF screenshots, 5 widths and 2 long-text/font-stress cases (synthetic DPI-independent layout).' -ForegroundColor Green
